@@ -30,8 +30,7 @@
                     .eq('id', userId)
                     .single();
                 
-                if (fetchError) throw fetchError;
-                  console.log('User data before update:', userData);
+                if (fetchError) throw fetchError;                  console.log('User data before update:', userData);
                   // ENHANCED DEBUGGING: Log the actual plan type from the database
                 console.log('PLAN TYPE DEBUG INFO:');
                 console.log('Current plan_type in database:', userData.plan_type);
@@ -39,6 +38,14 @@
                 console.log('Is plan_type null?', userData.plan_type === null);
                 console.log('Is plan_type empty string?', userData.plan_type === '');
                 console.log('User data dump:', JSON.stringify(userData));
+                
+                // CHECK LOCAL STORAGE FOR CONFIRMED PLAN TYPE
+                // This was set during checkout session creation
+                const storedPlanType = localStorage.getItem('serverConfirmedPlanType');
+                const debugPlanType = localStorage.getItem('debugSelectedPlanType');
+                
+                console.log('Plan type from localStorage serverConfirmedPlanType:', storedPlanType);
+                console.log('Plan type from localStorage debugSelectedPlanType:', debugPlanType);
                 
                 let newStatus = 'active';
                 
@@ -56,12 +63,20 @@
                     console.log('Using regular subscription status (plan_type: ' + userData.plan_type + ')');
                 }
                 
-                console.log('Setting subscription_status to:', newStatus);
-                  // Prepare update data - add plan_type if needed
+                console.log('Setting subscription_status to:', newStatus);                // Prepare update data - add plan_type if needed
                 let updateData = { 
                     subscription_status: newStatus,
                     updated_at: new Date().toISOString()
                 };
+                
+                // Use stored plan type from localStorage if available
+                if (storedPlanType && (!userData.plan_type || userData.plan_type === '')) {
+                    console.log('CRITICAL FIX: Using stored plan type from localStorage:', storedPlanType);
+                    updateData.plan_type = storedPlanType;
+                } else if (debugPlanType && (!userData.plan_type || userData.plan_type === '')) {
+                    console.log('CRITICAL FIX: Using debug plan type from localStorage:', debugPlanType);
+                    updateData.plan_type = debugPlanType;
+                }
                 
                 // IMPORTANT: If plan_type is empty but we can determine it, set it now
                 // This is a backup in case the create-checkout-session handler failed to set it
@@ -123,7 +138,35 @@
                 }
                   // Also verify plan_type was set
                 if (!verifyUser.plan_type) {
-                    console.error('Plan type is still empty after update! This indicates a database permission issue.');
+                    console.error('Plan type is still empty after update! Attempting direct SQL fix...');
+                    
+                    try {
+                        // Try to use stored values for plan type
+                        const finalPlanType = storedPlanType || debugPlanType || 
+                                             (userData.selected_plan === 'price_lifetime_deal_297' ? 'Lifetime Deal' : 
+                                              userData.selected_plan === 'price_1RYhAlE92IbV5FBUCtOmXIow' ? 'Starter' :
+                                              userData.selected_plan === 'price_1RSdrmE92IbV5FBUV1zE2VhD' ? 'Pro' : 'Starter');
+                        
+                        console.log(`Attempting direct SQL update with plan_type: ${finalPlanType}`);
+                        
+                        // Try using RPC if available
+                        if (stack.supabaseAdmin) {
+                            const { error: rpcError } = await stack.supabaseAdmin.rpc('admin_set_plan_type', { 
+                                user_id: userId,
+                                new_plan_type: finalPlanType
+                            });
+                            
+                            if (rpcError) {
+                                console.error('Direct SQL update failed:', rpcError);
+                            } else {
+                                console.log('Direct SQL update succeeded!');
+                            }
+                        } else {
+                            console.error('No admin client available for direct SQL update');
+                        }
+                    } catch (sqlError) {
+                        console.error('Error in direct SQL update:', sqlError);
+                    }
                     
                     // LAST RESORT RECOVERY: 
                     // Try one more time with direct update using selected_plan

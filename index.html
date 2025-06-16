@@ -45,14 +45,37 @@
                 // Initialize StartupStack if needed
                 if (!window.StartupStack?.initialized) {
                     await initializeApp();
-                }
-
-                // Store the selected price ID
+                }                // Store the selected price ID with enhanced debugging
                 const priceId = currentButton.dataset.priceId;
                 if (!priceId) {
                     throw new Error('Invalid price selected');
                 }
+                
+                // CRITICAL DEBUG
+                console.log('%c PLAN SELECTION DEBUG ', 'background: #ff0000; color: white; font-size: 16px;');
+                console.log('Button clicked:', currentButton);
+                console.log('Button text:', currentButton.innerText);
+                console.log('Price ID from dataset:', priceId);
+                console.log('Button classList:', Array.from(currentButton.classList));
+                console.log('Button HTML:', currentButton.outerHTML);
+                
+                // Determine plan directly from priceId for immediate validation
+                let selectedPlanType;
+                if (priceId === 'price_lifetime_deal_297') {
+                    selectedPlanType = 'Lifetime Deal';
+                } else if (priceId === 'price_1RYhAlE92IbV5FBUCtOmXIow') {
+                    selectedPlanType = 'Starter';
+                } else if (priceId === 'price_1RSdrmE92IbV5FBUV1zE2VhD') {
+                    selectedPlanType = 'Pro';
+                } else {
+                    selectedPlanType = 'Unknown';
+                }
+                
+                console.log('Determined plan type:', selectedPlanType);
+                
+                // Store both for later use
                 localStorage.setItem('selectedPriceId', priceId);
+                localStorage.setItem('debugSelectedPlanType', selectedPlanType);
 
                 openAuthModal();
 
@@ -595,8 +618,12 @@ async function createCheckoutSession(email, userId) {
         planType: planType, // Explicitly pass plan type
         isLifetimeDeal: isLifetimeDeal
     };
-    
-    console.log('Sending request with body:', requestBody);
+      // CRITICAL DEBUG FOR FRONTEND->BACKEND COMMUNICATION
+    console.log('%c CREATE CHECKOUT SESSION - FRONTEND TO BACKEND DATA ', 'background: #ff0000; color: white; font-size: 14px;');
+    console.log('Final request body to be sent:', JSON.stringify(requestBody, null, 2));
+    console.log('Price ID being sent:', requestBody.priceId);
+    console.log('Plan Type being sent:', requestBody.planType);
+    console.log('Is Lifetime Deal flag:', requestBody.isLifetimeDeal);
     
     const response = await fetch('/.netlify/functions/create-checkout-session', {
         method: 'POST',
@@ -611,12 +638,20 @@ async function createCheckoutSession(email, userId) {
         const errorData = await response.json();
         console.error('Checkout error:', errorData);
         throw new Error(errorData.error || ERROR_MESSAGES.CHECKOUT_FAILED);
-    }
-
-    const data = await response.json();
+    }    const data = await response.json();
     if (!data.id || !data.success) {
         console.error('Invalid checkout response:', data);
         throw new Error(data.error || ERROR_MESSAGES.INVALID_RESPONSE);
+    }
+    
+    // STORE THE SERVER-CONFIRMED PLAN TYPE
+    // This ensures we're using the value that the server determined,
+    // which should match what will be stored in the database
+    if (data.plan_type) {
+        console.log('Server confirmed plan_type:', data.plan_type);
+        localStorage.setItem('serverConfirmedPlanType', data.plan_type);
+    } else {
+        console.warn('Server did not return plan_type in response!');
     }
 
     return data.id;

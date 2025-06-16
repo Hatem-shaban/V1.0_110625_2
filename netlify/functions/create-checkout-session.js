@@ -44,16 +44,31 @@ exports.handler = async (event, context) => {
     try {
         if (event.httpMethod !== 'POST') {
             throw new Error('Method not allowed');
-        }        // Parse request body
+        }                // Parse request body
         const requestBody = JSON.parse(event.body);
         const { customerEmail, userId, priceId, planType: requestedPlanType } = requestBody;
+        
+        // DETAILED DEBUG FOR DIRECT API REQUEST
+        console.log('-------------------------------------------');
+        console.log('🚨 CHECKOUT SESSION CREATION - REQUEST DATA');
+        console.log('-------------------------------------------');
+        
+        console.log(`priceId: "${priceId}" (${typeof priceId})`);
+        console.log(`requestedPlanType: "${requestedPlanType}" (${typeof requestedPlanType})`);
+        console.log(`isLifetimeDeal flag: ${requestBody.isLifetimeDeal} (${typeof requestBody.isLifetimeDeal})`);
+        
+        // Check exact values against known good ones
+        console.log('priceId matches:');
+        console.log('- Is price_lifetime_deal_297?', priceId === 'price_lifetime_deal_297');
+        console.log('- Is price_1RYhAlE92IbV5FBUCtOmXIow?', priceId === 'price_1RYhAlE92IbV5FBUCtOmXIow');
+        console.log('- Is price_1RSdrmE92IbV5FBUV1zE2VhD?', priceId === 'price_1RSdrmE92IbV5FBUV1zE2VhD');
         
         // Check for lifetime deal in multiple ways to be extra safe
         const isLifetimeDeal = 
             requestBody.isLifetimeDeal === true || 
             priceId === 'price_lifetime_deal_297';
             
-        console.log('Full request body:', requestBody);
+        console.log('Full request body:', JSON.stringify(requestBody, null, 2));
         console.log('Parsed checkout info:', { 
             customerEmail, 
             userId, 
@@ -62,6 +77,7 @@ exports.handler = async (event, context) => {
             isLifetimeDealFromRequest: requestBody.isLifetimeDeal,
             requestedPlanType
         });
+        console.log('-------------------------------------------');
 
         if (!customerEmail || !userId) {
             throw new Error('Missing required fields');
@@ -228,8 +244,30 @@ exports.handler = async (event, context) => {
                     .eq('id', userId)
                     .single();
                     
-                if (!verifyError) {
-                    console.log('Verified user update:', verifyData);
+                if (!verifyError) {            console.log('Verified user update:', verifyData);
+                    
+                    // DIRECT SQL UPDATE AS LAST RESORT
+                    // This bypasses any RLS policies or Supabase client issues
+                    try {
+                        // Only do this if there's still an issue with plan_type
+                        if (!verifyData.plan_type || verifyData.plan_type === '') {
+                            console.log('🚨 CRITICAL: plan_type still empty after update, trying direct SQL...');
+                            
+                            // Use RPC call to execute SQL directly
+                            const { error: rpcError } = await supabaseAdmin.rpc('admin_set_plan_type', { 
+                                user_id: userId,
+                                new_plan_type: planType
+                            });
+                            
+                            if (rpcError) {
+                                console.error('Direct SQL update failed:', rpcError);
+                            } else {
+                                console.log('Direct SQL update succeeded!');
+                            }
+                        }
+                    } catch (sqlError) {
+                        console.error('Error in direct SQL update:', sqlError);
+                    }
                 }
                 
                 break;
