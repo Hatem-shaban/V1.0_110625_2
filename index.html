@@ -332,11 +332,11 @@
                         <li><i class="fas fa-check text-green-400 mr-2"></i>Lifetime Updates</li>
                         <li><i class="fas fa-check text-green-400 mr-2"></i>Future Tools Included</li>
                         <li><i class="fas fa-check text-green-400 mr-2"></i>Reseller Rights</li>
-                    </ul>
-                    <button 
-                        onclick="startCheckout(event)"
+                    </ul>                    <button 
+                        onclick="startCheckout(event)" 
                         data-checkout-button
                         data-price-id="price_1RYhFGE92IbV5FBUqiKOcIqX"
+                        data-is-lifetime="true"
                         disabled
                         class="w-full bg-gradient-to-r from-green-600 to-blue-600 text-white py-3 rounded-lg hover:opacity-90 transition duration-200">
                         <i class="fas fa-credit-card mr-2"></i>Get Lifetime Access
@@ -399,9 +399,7 @@
             document.getElementById('pricing').scrollIntoView({ behavior: 'smooth' });
         }
         
-        const stripe = Stripe('pk_test_51Ps2dzE92IbV5FBUbYDh6nBs2WLVSofAVNDwp5emPBrLW1vdaRjZXVW2o6A9nYvPQDqy8k95sd8bQmF497HlHLUk00a07sJfdo');
-
-        async function startCheckout(event) {
+        const stripe = Stripe('pk_test_51Ps2dzE92IbV5FBUbYDh6nBs2WLVSofAVNDwp5emPBrLW1vdaRjZXVW2o6A9nYvPQDqy8k95sd8bQmF497HlHLUk00a07sJfdo');        async function startCheckout(event) {
             event.preventDefault();
             const currentButton = event.currentTarget;
             const originalText = currentButton.innerHTML;
@@ -420,7 +418,14 @@
                 if (!priceId) {
                     throw new Error('Invalid price selected');
                 }
+                
+                // Check if this is the lifetime deal button
+                const isLifetimeDeal = currentButton.dataset.isLifetime === 'true';
+                console.log('Selected plan:', isLifetimeDeal ? 'Lifetime Deal' : 'Subscription');
+                
+                // Store checkout info in localStorage
                 localStorage.setItem('selectedPriceId', priceId);
+                localStorage.setItem('isLifetimeDeal', isLifetimeDeal ? 'true' : 'false');
 
                 openAuthModal();
 
@@ -544,6 +549,9 @@ const ERROR_MESSAGES = {
 
 async function createCheckoutSession(email, userId) {
     const priceId = localStorage.getItem('selectedPriceId');
+    const isLifetimeDeal = localStorage.getItem('isLifetimeDeal') === 'true';
+    
+    console.log('Creating checkout session with:', { priceId, isLifetimeDeal });
     
     const response = await fetch('/.netlify/functions/create-checkout-session', {
         method: 'POST',
@@ -554,9 +562,10 @@ async function createCheckoutSession(email, userId) {
         body: JSON.stringify({ 
             customerEmail: email, 
             userId,
-            priceId: priceId || process.env.STRIPE_PRICE_ID // Fallback to default price
+            priceId: priceId || process.env.STRIPE_PRICE_ID, // Fallback to default price
+            isLifetimeDeal: isLifetimeDeal // Send flag to backend
         })
-    });    if (!response.ok) {
+    });if (!response.ok) {
         const errorData = await response.json();
         console.error('Checkout error:', errorData);
         throw new Error(errorData.error || ERROR_MESSAGES.CHECKOUT_FAILED);

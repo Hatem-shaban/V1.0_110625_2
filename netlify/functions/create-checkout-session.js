@@ -26,14 +26,13 @@ exports.handler = async (event, context) => {
 
     if (event.httpMethod === 'OPTIONS') {
         return { statusCode: 200, headers };
-    }
-
-    try {
+    }    try {
         if (event.httpMethod !== 'POST') {
             throw new Error('Method not allowed');
         }
 
-        const { customerEmail, userId, priceId } = JSON.parse(event.body);
+        const { customerEmail, userId, priceId, isLifetimeDeal } = JSON.parse(event.body);
+        console.log('Request body:', { customerEmail, userId, priceId, isLifetimeDeal });
 
         if (!customerEmail || !userId) {
             throw new Error('Missing required fields');
@@ -56,19 +55,24 @@ exports.handler = async (event, context) => {
             };        }          // Determine plan type based on the price ID
         let planType;
         let isLifetimePlan = false;
-        
-        // Log the priceId for debugging
+          // Log the priceId for debugging
         console.log('Processing checkout with priceId:', priceId);
           // Explicitly match price IDs to plan types
         if (priceId === 'price_1RYhAlE92IbV5FBUCtOmXIow') {
             console.log('Matched Starter plan');
             planType = 'Starter'; // Use consistent naming that matches what the database expects
-        } else if (priceId === 'price_1RYhFGE92IbV5FBUqiKOcIqX') {
-            console.log('Matched Pro plan');
-            planType = 'Pro'; // Use consistent naming that matches what the database expects
-        } else if (priceId === 'price_lifetime') { // Lifetime deal ID
-            console.log('Matched Lifetime Deal plan');
-            planType = 'Lifetime Deal'; // Use consistent naming that matches what the database expects
+        } else if (priceId === 'price_1RYhFGE92IbV5FBUqiKOcIqX') {            // Check if this is a lifetime deal based on the flag passed from frontend
+            if (isLifetimeDeal === true) {
+                console.log('Matched Lifetime Deal plan (via isLifetimeDeal flag)');
+                planType = 'Lifetime Deal';
+                isLifetimePlan = true;
+            } else {
+                console.log('Matched Pro plan');
+                planType = 'Pro';
+            }
+        } else if (priceId === 'price_lifetime') { // Old Lifetime deal ID
+            console.log('Matched Lifetime Deal plan (via legacy ID)');
+            planType = 'Lifetime Deal';
             isLifetimePlan = true;
         } else {
             console.log('No match, defaulting to Starter plan');
@@ -77,15 +81,40 @@ exports.handler = async (event, context) => {
         
         // Double check the final value to ensure it's what we expect
         console.log('Final plan_type value:', planType);
+          // Create Stripe checkout session with specified price ID
+        // For lifetime deals, we need to use payment mode instead of subscription mode
+        const checkoutMode = isLifetimePlan ? 'payment' : 'subscription';
+        console.log('Using checkout mode:', checkoutMode);
         
-        // Create Stripe checkout session with specified price ID
+        // For lifetime deals, we might need a special price ID or amount-based setup
+        let lineItems;
+        
+        if (isLifetimePlan) {
+            // For lifetime deals, create a one-time payment
+            lineItems = [{
+                // Use amount_total for one-time payments
+                price_data: {
+                    currency: 'usd',
+                    product_data: {
+                        name: 'StartupStack Lifetime Access',
+                        description: 'One-time payment for lifetime access to StartupStack',
+                    },
+                    unit_amount: 29700, // $297.00
+                },
+                quantity: 1,
+            }];
+        } else {
+            // For subscriptions, use the provided price ID
+            lineItems = [{
+                price: priceId || process.env.STRIPE_PRICE_ID,
+                quantity: 1,
+            }];
+        }
+        
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ['card'],
-            mode: isLifetimePlan ? 'payment' : 'subscription',
-            line_items: [{
-                price: priceId || process.env.STRIPE_PRICE_ID, // Use provided price ID or fallback to default
-                quantity: 1,
-            }],
+            mode: checkoutMode,
+            line_items: lineItems,
             success_url: `${process.env.URL}/success.html?session_id={CHECKOUT_SESSION_ID}&userId=${userId}`,
             cancel_url: `${process.env.URL}?checkout=cancelled`,
             customer_email: customerEmail,
