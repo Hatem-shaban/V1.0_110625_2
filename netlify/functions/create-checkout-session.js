@@ -53,16 +53,30 @@ exports.handler = async (event, context) => {
                 statusCode: 404,
                 headers,
                 body: JSON.stringify({ error: 'User not found' })
-            };        }
+            };        }          // Determine plan type based on the price ID
+        let planType;
+        let isLifetimePlan = false;
         
-        // Determine checkout mode and plan type based on the price ID
-        const priceIdToPlan = {
-            'price_1RYhAlE92IbV5FBUCtOmXIow': { type: 'Starter', isLifetime: false },
-            'price_1RYhFGE92IbV5FBUqiKOcIqX': { type: 'Pro', isLifetime: false }
-        };
-
-        const planInfo = priceIdToPlan[priceId] || { type: 'Starter', isLifetime: false };
-        const isLifetimePlan = planInfo.isLifetime;
+        // Log the priceId for debugging
+        console.log('Processing checkout with priceId:', priceId);
+        
+        switch(priceId) {
+            case 'price_1RYhAlE92IbV5FBUCtOmXIow':
+                planType = 'Starter';
+                break;
+            case 'price_1RYhFGE92IbV5FBUqiKOcIqX':
+                planType = 'Pro';
+                break;
+            case 'price_lifetime': // Replace with actual Lifetime Deal price ID when available
+                planType = 'Lifetime Deal';
+                isLifetimePlan = true;
+                break;
+            default:
+                planType = 'Starter';
+        }
+        
+        // Log the determined plan type
+        console.log('Determined plan type:', planType, 'isLifetimePlan:', isLifetimePlan);
         
         // Create Stripe checkout session with specified price ID
         const session = await stripe.checkout.sessions.create({
@@ -85,11 +99,10 @@ exports.handler = async (event, context) => {
         let updateError;
 
         while (retryCount < maxRetries) {
-            const { error } = await supabase                .from('users')
-                .update({
+            const { error } = await supabase                .from('users')                .update({
                     subscription_status: isLifetimePlan ? 'pending_lifetime' : 'pending_activation',
                     stripe_session_id: session.id,
-                    plan_type: planInfo.type,
+                    plan_type: planType,
                     selected_plan: priceId || process.env.STRIPE_PRICE_ID,
                     updated_at: new Date().toISOString()
                 })
@@ -113,11 +126,12 @@ exports.handler = async (event, context) => {
 
         return {
             statusCode: 200,
-            headers,
-            body: JSON.stringify({ 
+            headers,            body: JSON.stringify({ 
                 id: session.id,
                 userId: userId,
-                success: true
+                success: true,
+                plan_type: planType,
+                mode: isLifetimePlan ? 'payment' : 'subscription'
             })
         };
 

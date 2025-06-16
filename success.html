@@ -23,21 +23,29 @@
 
                 statusDiv.innerHTML = 'Initializing...';
                 const stack = await startupStackPromise;                statusDiv.innerHTML = 'Updating subscription status...';
-                
-                // First fetch the current user data to get plan type
+                  // First fetch the current user data to get plan type
                 const { data: userData, error: fetchError } = await stack.supabase
                     .from('users')
-                    .select('plan_type')
+                    .select('plan_type, subscription_status')
                     .eq('id', userId)
                     .single();
                 
                 if (fetchError) throw fetchError;
                 
+                console.log('User data before update:', userData);
+                
+                let newStatus = 'active';
+                if (userData.plan_type === 'Lifetime Deal') {
+                    newStatus = 'lifetime_active';
+                }
+                
+                console.log('Setting subscription_status to:', newStatus);
+                
                 // Now update the subscription status
                 const { data, error } = await stack.supabase
                     .from('users')
                     .update({ 
-                        subscription_status: userData.plan_type === 'Lifetime Deal' ? 'lifetime_active' : 'active',
+                        subscription_status: newStatus,
                         updated_at: new Date().toISOString()
                     })
                     .eq('id', userId)
