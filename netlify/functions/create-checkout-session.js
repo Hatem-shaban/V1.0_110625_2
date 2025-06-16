@@ -17,6 +17,19 @@ const supabase = createClient(
     }
 );
 
+// Initialize a service role client to bypass RLS policies
+// NOTE: You'll need to add SUPABASE_SERVICE_ROLE_KEY to your Netlify environment variables
+const supabaseAdmin = process.env.SUPABASE_SERVICE_ROLE_KEY ? 
+    createClient(
+        process.env.SUPABASE_URL,
+        process.env.SUPABASE_SERVICE_ROLE_KEY,
+        {
+            auth: {
+                persistSession: false
+            }
+        }
+    ) : supabase; // Fallback to regular client if no service role key
+
 exports.handler = async (event, context) => {
     const headers = {
         'Access-Control-Allow-Origin': '*',
@@ -104,13 +117,21 @@ exports.handler = async (event, context) => {
         else {
             console.log('Creating SUBSCRIPTION checkout with priceId:', priceId);
             subscriptionStatus = 'pending_activation';
-            
-            // Determine plan type based on the price ID
+              // Determine plan type based on the price ID
+            // UPDATED PRICE ID MAPPING
+            console.log('Determining plan type from price ID:', priceId);
             if (priceId === 'price_1RYhAlE92IbV5FBUCtOmXIow') {
                 planType = 'Starter';
+                console.log('Matched to Starter plan');
+            } else if (priceId === 'price_1RSdrmE92IbV5FBUV1zE2VhD') {
+                planType = 'Pro'; 
+                console.log('Matched to Pro plan');
             } else if (priceId === 'price_1RYhFGE92IbV5FBUqiKOcIqX') {
+                // Keep this for backward compatibility
                 planType = 'Pro';
+                console.log('Matched to Pro plan (legacy ID)');
             } else {
+                console.log('No price ID match found, defaulting to Starter');
                 planType = 'Starter'; // Default
             }
             
@@ -184,10 +205,10 @@ exports.handler = async (event, context) => {
             };
             
             console.log('Update data (full):', JSON.stringify(updateData));
-            
-            // Try update with more specific debugging
-            console.log(`Attempt ${retryCount + 1}/${maxRetries} to update user ${userId}`);
-            const updateResult = await supabase
+              // Try update with more specific debugging
+            // IMPORTANT: Use supabaseAdmin to bypass RLS policies
+            console.log(`Attempt ${retryCount + 1}/${maxRetries} to update user ${userId} using ${supabaseAdmin === supabase ? 'regular client' : 'admin client'}`);
+            const updateResult = await supabaseAdmin
                 .from('users')
                 .update(updateData)
                 .eq('id', userId);

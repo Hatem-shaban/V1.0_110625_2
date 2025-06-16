@@ -67,30 +67,38 @@
                 // This is a backup in case the create-checkout-session handler failed to set it
                 if (!userData.plan_type) {
                     console.log('Plan type is empty, attempting to set based on available information');
-                    
-                    // Try to determine plan type from selected_plan (price ID)
+                      // Try to determine plan type from selected_plan (price ID)
                     if (userData.selected_plan) {
+                        // UPDATED PRICE ID MAPPING
+                        console.log('Recovery: determining plan from price ID:', userData.selected_plan);
+                        
                         if (userData.selected_plan === 'price_lifetime_deal_297') {
                             updateData.plan_type = 'Lifetime Deal';
-                            console.log('Setting missing plan_type to Lifetime Deal based on price ID');
+                            console.log('Recovery: setting plan_type to Lifetime Deal');
                         } else if (userData.selected_plan === 'price_1RYhAlE92IbV5FBUCtOmXIow') {
                             updateData.plan_type = 'Starter';
-                            console.log('Setting missing plan_type to Starter based on price ID');
+                            console.log('Recovery: setting plan_type to Starter');
+                        } else if (userData.selected_plan === 'price_1RSdrmE92IbV5FBUV1zE2VhD') {
+                            updateData.plan_type = 'Pro';
+                            console.log('Recovery: setting plan_type to Pro');
                         } else if (userData.selected_plan === 'price_1RYhFGE92IbV5FBUqiKOcIqX') {
                             updateData.plan_type = 'Pro';
-                            console.log('Setting missing plan_type to Pro based on price ID');
+                            console.log('Recovery: setting plan_type to Pro (legacy ID)');
                         } else {
                             // Default to Starter if unknown
                             updateData.plan_type = 'Starter';
-                            console.log('Setting missing plan_type to default Starter');
+                            console.log('Recovery: unknown price ID, defaulting to Starter');
                         }
                     }
                 }
                 
                 console.log('Updating user with:', updateData);
+                  // Now update the subscription status and possibly plan_type
+                // Try to use supabaseAdmin if it exists, otherwise fall back to regular client
+                const supabaseClient = stack.supabaseAdmin || stack.supabase;
+                console.log('Using client:', supabaseClient === stack.supabase ? 'regular' : 'admin');
                 
-                // Now update the subscription status and possibly plan_type
-                const { data, error } = await stack.supabase
+                const { data, error } = await supabaseClient
                     .from('users')
                     .update(updateData)
                     .eq('id', userId)

@@ -5,6 +5,18 @@ const supabaseUrl = 'https://ygnrdquwnafkbkxirtae.supabase.co'
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlnbnJkcXV3bmFma2JreGlydGFlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDgxNTY3MjMsImV4cCI6MjA2MzczMjcyM30.R1QNPExVxHJ8wQjvkuOxfPH0Gf1KR4HOafaP3flPWaI'
 const supabase = createClient(supabaseUrl, supabaseKey)
 
+// Try to get service role key from meta tag (securely injected by server)
+const getServiceRoleKey = () => {
+    const serviceRoleKeyMeta = document.querySelector('meta[name="supabase-service-key"]')
+    return serviceRoleKeyMeta ? serviceRoleKeyMeta.content : null
+}
+
+// Create admin client if service role key is available
+const supabaseAdmin = (() => {
+    const serviceRoleKey = getServiceRoleKey()
+    return serviceRoleKey ? createClient(supabaseUrl, serviceRoleKey) : null
+})()
+
 // User management class
 class UserManager {
     constructor(supabase) {
@@ -135,11 +147,11 @@ async function initializeStartupStack() {
         // Create instances
         const aiTools = new StartupStackAI();
         const userManager = new UserManager(supabase);
-        
-        const stack = {
+          const stack = {
             aiTools,
             userManager,
             supabase,
+            supabaseAdmin, // Include admin client if available
             initialized: true
         };
 

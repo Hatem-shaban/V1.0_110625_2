@@ -549,17 +549,24 @@ const ERROR_MESSAGES = {
 
 async function createCheckoutSession(email, userId) {
     const priceId = localStorage.getItem('selectedPriceId');
-    
-    // Determine plan type from price ID for consistent handling
+      // Determine plan type from price ID for consistent handling
+    // UPDATED PRICE ID MAPPING TO MATCH ACTUAL HTML ELEMENTS
     let planType;
     if (priceId === 'price_lifetime_deal_297') {
         planType = 'Lifetime Deal';
+        console.log('Setting plan type: Lifetime Deal');
     } else if (priceId === 'price_1RYhAlE92IbV5FBUCtOmXIow') {
         planType = 'Starter';
-    } else if (priceId === 'price_1RYhFGE92IbV5FBUqiKOcIqX') {
+        console.log('Setting plan type: Starter');
+    } else if (priceId === 'price_1RSdrmE92IbV5FBUV1zE2VhD') {
         planType = 'Pro';
+        console.log('Setting plan type: Pro');
+    } else if (priceId === 'price_1RYhFGE92IbV5FBUqiKOcIqX') { // Legacy ID
+        planType = 'Pro'; 
+        console.log('Setting plan type: Pro (legacy ID)');
     } else {
         planType = 'Starter'; // Default
+        console.log('Unknown price ID, defaulting to: Starter');
     }
     
     // Set isLifetimeDeal flag based on price ID or localStorage
