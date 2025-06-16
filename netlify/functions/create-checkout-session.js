@@ -33,7 +33,8 @@ exports.handler = async (event, context) => {
             throw new Error('Method not allowed');
         }
 
-        // Parse request body        const requestBody = JSON.parse(event.body);
+        // Parse request body
+        const requestBody = JSON.parse(event.body);
         const { customerEmail, userId, priceId } = requestBody;
         
         // Check for lifetime deal in multiple ways to be extra safe

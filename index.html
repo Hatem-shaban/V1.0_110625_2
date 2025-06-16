@@ -576,11 +576,14 @@ async function createCheckoutSession(email, userId) {
     
     const response = await fetch('/.netlify/functions/create-checkout-session', {
         method: 'POST',
-        headers: { 
+        headers: {
             'Content-Type': 'application/json',
             'Accept': 'application/json'
-        },        body: JSON.stringify(requestBody)
-    });if (!response.ok) {
+        },
+        body: JSON.stringify(requestBody)
+    });
+    
+    if (!response.ok) {
         const errorData = await response.json();
         console.error('Checkout error:', errorData);
         throw new Error(errorData.error || ERROR_MESSAGES.CHECKOUT_FAILED);
