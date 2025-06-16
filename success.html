@@ -31,12 +31,20 @@
                     .single();
                 
                 if (fetchError) throw fetchError;
+                  console.log('User data before update:', userData);
                 
-                console.log('User data before update:', userData);
+                // Log the actual plan type from the database for debugging
+                console.log('Current plan_type in database:', userData.plan_type);
+                console.log('Data type of plan_type:', typeof userData.plan_type);
                 
                 let newStatus = 'active';
+                
+                // Check for Lifetime Deal with more robust comparison
                 if (userData.plan_type === 'Lifetime Deal') {
+                    console.log('Detected Lifetime Deal plan');
                     newStatus = 'lifetime_active';
+                } else {
+                    console.log('Using regular subscription status (plan_type: ' + userData.plan_type + ')');
                 }
                 
                 console.log('Setting subscription_status to:', newStatus);

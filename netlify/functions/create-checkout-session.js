@@ -59,17 +59,16 @@ exports.handler = async (event, context) => {
         
         // Log the priceId for debugging
         console.log('Processing checkout with priceId:', priceId);
-        
-        // Explicitly match price IDs to plan types
+          // Explicitly match price IDs to plan types
         if (priceId === 'price_1RYhAlE92IbV5FBUCtOmXIow') {
             console.log('Matched Starter plan');
-            planType = 'Starter';
+            planType = 'Starter'; // Use consistent naming that matches what the database expects
         } else if (priceId === 'price_1RYhFGE92IbV5FBUqiKOcIqX') {
             console.log('Matched Pro plan');
-            planType = 'Pro';
+            planType = 'Pro'; // Use consistent naming that matches what the database expects
         } else if (priceId === 'price_lifetime') { // Lifetime deal ID
             console.log('Matched Lifetime Deal plan');
-            planType = 'Lifetime Deal';
+            planType = 'Lifetime Deal'; // Use consistent naming that matches what the database expects
             isLifetimePlan = true;
         } else {
             console.log('No match, defaulting to Starter plan');
@@ -103,6 +102,24 @@ exports.handler = async (event, context) => {
         console.log('- selected_plan:', priceId || process.env.STRIPE_PRICE_ID);
         console.log('- subscription_status:', isLifetimePlan ? 'pending_lifetime' : 'pending_activation');
         
+        // Try to diagnose database schema issues by making a separate call to get column definitions
+        try {
+            // Query the database to check existing user data
+            const { data: existingData, error: fetchError } = await supabase
+                .from('users')
+                .select('plan_type')
+                .eq('id', userId)
+                .single();
+                
+            if (fetchError) {
+                console.error('Error fetching existing user data:', fetchError);
+            } else {
+                console.log('Current plan_type value in database:', existingData.plan_type);
+            }
+        } catch (e) {
+            console.error('Error checking database schema:', e);
+        }
+        
         while (retryCount < maxRetries) {
             // Create update object explicitly to ensure clarity
             const updateData = {
@@ -114,7 +131,22 @@ exports.handler = async (event, context) => {
             };
             
             console.log('Update data:', JSON.stringify(updateData));
+              // First, make a separate update just for plan_type to isolate any issues
+            const { error: planTypeError } = await supabase
+                .from('users')
+                .update({ plan_type: planType })
+                .eq('id', userId);
+                
+            if (planTypeError) {
+                console.error('Error updating plan_type only:', planTypeError);
+                console.error('Code:', planTypeError.code);
+                console.error('Message:', planTypeError.message);
+                console.error('Details:', planTypeError.details);
+            } else {
+                console.log('Successfully updated plan_type to:', planType);
+            }
             
+            // Now try the full update
             const { error } = await supabase
                 .from('users')
                 .update(updateData)
@@ -122,10 +154,33 @@ exports.handler = async (event, context) => {
 
             if (!error) {
                 updateError = null;
+                
+                // Double-check that the plan_type was actually updated
+                const { data: verifyData, error: verifyError } = await supabase
+                    .from('users')
+                    .select('plan_type')
+                    .eq('id', userId)
+                    .single();
+                    
+                if (verifyError) {
+                    console.error('Error verifying plan_type update:', verifyError);
+                } else {
+                    console.log('Verified plan_type after update:', verifyData.plan_type);
+                    if (verifyData.plan_type !== planType) {
+                        console.warn('Warning: plan_type was not updated correctly in database!');
+                        console.warn('Expected:', planType);
+                        console.warn('Actual:', verifyData.plan_type);
+                    }
+                }
+                
                 break;
             }
 
             updateError = error;
+            console.error('Update error details:');
+            console.error('Code:', error.code);
+            console.error('Message:', error.message);
+            if (error.details) console.error('Details:', error.details);
             retryCount++;
             await new Promise(resolve => setTimeout(resolve, 1000 * retryCount)); // Exponential backoff
         }
