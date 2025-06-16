@@ -54,24 +54,13 @@ exports.handler = async (event, context) => {
                 headers,
                 body: JSON.stringify({ error: 'User not found' })
             };
-        }        // Determine plan type based on the price ID
-        let planType;
-        switch(priceId) {
-            case 'price_starter': // Replace with actual Starter plan price ID
-                planType = 'Starter';
-                break;
-            case 'price_pro': // Replace with actual Pro plan price ID
-                planType = 'Pro';
-                break;
-            case 'price_1RYhFGE92IbV5FBUqiKOcIqX': // Lifetime Deal price ID
-                planType = 'Lifetime Deal';
-                break;
-            default:
-                planType = 'Starter'; // Default to Starter plan
-        }
+        }        // Determine checkout mode and plan type based on the price ID        const priceIdToPlan = {
+            'price_1RYhAlE92IbV5FBUCtOmXIow': { type: 'Starter', isLifetime: false },
+            'price_1RYhFGE92IbV5FBUqiKOcIqX': { type: 'Pro', isLifetime: false }
+        };
 
-        // Determine checkout mode based on the price ID
-        const isLifetimePlan = priceId === 'price_1RYhFGE92IbV5FBUqiKOcIqX';
+        const planInfo = priceIdToPlan[priceId] || { type: 'Starter', isLifetime: false };
+        const isLifetimePlan = planInfo.isLifetime;
         
         // Create Stripe checkout session with specified price ID
         const session = await stripe.checkout.sessions.create({
@@ -95,9 +84,10 @@ exports.handler = async (event, context) => {
 
         while (retryCount < maxRetries) {
             const { error } = await supabase
-                .from('users')
-                .update({                    subscription_status: isLifetimePlan ? 'pending_lifetime' : 'pending_activation',
+                .from('users')                .update({
+                    subscription_status: isLifetimePlan ? 'pending_lifetime' : 'pending_activation',
                     stripe_session_id: session.id,
+                    plan_type: planInfo.type,
                     selected_plan: priceId || process.env.STRIPE_PRICE_ID,
                     updated_at: new Date().toISOString(),
                     plan_type: planType
