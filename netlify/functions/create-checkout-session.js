@@ -33,13 +33,22 @@ exports.handler = async (event, context) => {
             throw new Error('Method not allowed');
         }
 
-        // Parse request body
-        const requestBody = JSON.parse(event.body);
+        // Parse request body        const requestBody = JSON.parse(event.body);
         const { customerEmail, userId, priceId } = requestBody;
-        // Explicitly check for the isLifetimeDeal flag
-        const isLifetimeDeal = requestBody.isLifetimeDeal === true;
         
-        console.log('Request body parsed:', { customerEmail, userId, priceId, isLifetimeDeal });
+        // Check for lifetime deal in multiple ways to be extra safe
+        const isLifetimeDeal = 
+            requestBody.isLifetimeDeal === true || 
+            priceId === 'price_lifetime_deal_297';
+            
+        console.log('Full request body:', requestBody);
+        console.log('Parsed checkout info:', { 
+            customerEmail, 
+            userId, 
+            priceId, 
+            isLifetimeDeal,
+            isLifetimeDealFromRequest: requestBody.isLifetimeDeal
+        });
 
         if (!customerEmail || !userId) {
             throw new Error('Missing required fields');
@@ -60,16 +69,16 @@ exports.handler = async (event, context) => {
                 headers,
                 body: JSON.stringify({ error: 'User not found' })
             };
-        }
-
-        // Determine plan type and create appropriate checkout session
+        }        // Determine plan type and create appropriate checkout session
         let planType;
         let sessionParams;
         let subscriptionStatus;
-
-        // HANDLE LIFETIME DEALS
-        if (isLifetimeDeal) {
-            console.log('Creating LIFETIME DEAL checkout');
+        
+        console.log('Price ID received:', priceId);
+        
+        // HANDLE LIFETIME DEALS - now check for special lifetime price ID
+        if (isLifetimeDeal || priceId === 'price_lifetime_deal_297') {
+            console.log('Creating LIFETIME DEAL checkout - explicitly setting mode to payment');
             planType = 'Lifetime Deal';
             subscriptionStatus = 'pending_lifetime';
             

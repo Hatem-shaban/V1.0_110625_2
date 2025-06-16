@@ -335,7 +335,7 @@
                     </ul>                    <button 
                         onclick="startCheckout(event)" 
                         data-checkout-button
-                        data-price-id="price_1RYhFGE92IbV5FBUqiKOcIqX"
+                        data-price-id="price_lifetime_deal_297"
                         data-is-lifetime="true"
                         disabled
                         class="w-full bg-gradient-to-r from-green-600 to-blue-600 text-white py-3 rounded-lg hover:opacity-90 transition duration-200">
@@ -549,22 +549,37 @@ const ERROR_MESSAGES = {
 
 async function createCheckoutSession(email, userId) {
     const priceId = localStorage.getItem('selectedPriceId');
-    const isLifetimeDeal = localStorage.getItem('isLifetimeDeal') === 'true';
     
-    console.log('Creating checkout session with:', { priceId, isLifetimeDeal });
+    // Determine if this is a lifetime deal by looking at the price ID directly
+    const isLifetimeDeal = priceId === 'price_lifetime_deal_297' || localStorage.getItem('isLifetimeDeal') === 'true';
+    
+    // Log all the details to help debugging
+    console.log('DETAILED CHECKOUT INFO:');
+    console.log('- priceId from localStorage:', priceId);
+    console.log('- isLifetimeDeal flag:', isLifetimeDeal);
+    console.log('- localStorage.isLifetimeDeal:', localStorage.getItem('isLifetimeDeal'));
+    console.log('- detected as lifetime deal:', isLifetimeDeal ? 'YES' : 'NO');
+    
+    // Force special lifetime handling for our special price ID
+    if (priceId === 'price_lifetime_deal_297') {
+        console.log('SPECIAL HANDLING: Detected lifetime price ID, forcing payment mode');
+    }
+    
+    const requestBody = { 
+        customerEmail: email, 
+        userId,
+        priceId: priceId || process.env.STRIPE_PRICE_ID,
+        isLifetimeDeal: isLifetimeDeal
+    };
+    
+    console.log('Sending request with body:', requestBody);
     
     const response = await fetch('/.netlify/functions/create-checkout-session', {
         method: 'POST',
         headers: { 
             'Content-Type': 'application/json',
             'Accept': 'application/json'
-        },
-        body: JSON.stringify({ 
-            customerEmail: email, 
-            userId,
-            priceId: priceId || process.env.STRIPE_PRICE_ID, // Fallback to default price
-            isLifetimeDeal: isLifetimeDeal // Send flag to backend
-        })
+        },        body: JSON.stringify(requestBody)
     });if (!response.ok) {
         const errorData = await response.json();
         console.error('Checkout error:', errorData);
