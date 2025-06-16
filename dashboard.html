@@ -5,10 +5,41 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>StartupStack Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <script type="module" src="app.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">    <style>
+        /* Add initial styles to prevent flash */
+        body {
+            opacity: 0;
+            transition: opacity 0.4s ease-in-out;
+        }
+        #loadingOverlay {
+            position: fixed;
+            inset: 0;
+            background-color: #111827; /* bg-gray-900 */
+            z-index: 50;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.3s ease-out;
+        }
+        /* Pre-hide all tool buttons until auth is complete */
+        [data-ai-tool] {
+            opacity: 0.8;
+            transition: opacity 0.3s ease;
+        }
+        [data-ai-tool]:not([disabled]) {
+            opacity: 1;
+        }
+    </style>
 </head>
 <body class="bg-gray-900 text-white">
+    <!-- Loading overlay added directly in HTML -->
+    <div id="loadingOverlay">
+        <div class="text-center">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
+            <p class="mt-4 text-white">Loading dashboard...</p>
+        </div>
+    </div>
+
     <div class="min-h-screen">
         <nav class="bg-gray-800 p-4">
             <div class="max-w-7xl mx-auto px-4 flex justify-between items-center">
@@ -110,14 +141,18 @@
                     </button>
                 </div>
             </div>
-        </main>
-    </div>
+        </main>    </div>
 
     <script type="module">
     import startupStackPromise from './app.js';
-
-    let authCheckComplete = false;
-
+    
+    // Global logout handler
+    window.handleLogout = function() {
+        localStorage.clear();
+        window.location.href = '/?logout=success';
+    };
+    
+    // Single authentication check function
     async function checkAuth() {
         try {
             const userId = localStorage.getItem('userId');
@@ -127,64 +162,58 @@
                 window.location.replace('/?auth=required');
                 return;
             }
-
+            
+            // Get the StartupStack instance
             const stack = await startupStackPromise;
-
+            console.log('StartupStack initialized for dashboard');
+            
+            // Check user status
             const { data: user, error } = await stack.supabase
                 .from('users')
                 .select('*')
                 .eq('id', userId)
                 .eq('email', userEmail)
                 .single();
-
+            
             if (error || !user) {
                 throw new Error('User verification failed');
             }
-
+            
             if (user.subscription_status !== 'active') {
                 window.location.replace('/?subscription=required');
                 return;
             }
-
-            // Show dashboard content
-            document.body.style.opacity = '1';
+            
+            // Update UI after auth
             document.getElementById('userEmail').textContent = userEmail;
-
-            // Enable AI tools
+            
+            // Enable all AI tool buttons
             document.querySelectorAll('[data-ai-tool]').forEach(button => {
                 button.disabled = false;
             });
-
+            
+            console.log('Authentication successful, dashboard ready');
+            
+            // Show the page content
+            document.body.style.opacity = '1';
+            
+            // Remove loading overlay with slight delay to ensure smooth transition
+            setTimeout(() => {
+                const overlay = document.getElementById('loadingOverlay');
+                if (overlay) {
+                    overlay.style.opacity = '0';
+                    setTimeout(() => overlay.remove(), 300);
+                }
+            }, 100);
+            
         } catch (error) {
             console.error('Auth check error:', error);
             window.location.replace('/?auth=error');
         }
     }
-
-    // Global logout handler
-    window.handleLogout = function() {
-        localStorage.clear();
-        window.location.href = '/?logout=success';
-    };
-
-    // Add loading indicator
-    document.body.insertAdjacentHTML('afterbegin', `
-        <div id="loadingOverlay" class="fixed inset-0 bg-gray-900 z-50 flex items-center justify-center">
-            <div class="text-center">
-                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
-                <p class="mt-4 text-white">Loading dashboard...</p>
-            </div>
-        </div>
-    `);
-
-    // Run auth check and remove loading overlay
-    document.addEventListener('DOMContentLoaded', async () => {
-        try {
-            await checkAuth();
-        } finally {
-            document.getElementById('loadingOverlay')?.remove();
-        }
-    });
+    
+    // Perform auth check when the DOM is fully loaded
+    document.addEventListener('DOMContentLoaded', checkAuth);
     </script>
 </body>
 </html>
