@@ -22,13 +22,22 @@
                 }
 
                 statusDiv.innerHTML = 'Initializing...';
-                const stack = await startupStackPromise;
-
-                statusDiv.innerHTML = 'Updating subscription status...';
-                // Update subscription status with explicit return
+                const stack = await startupStackPromise;                statusDiv.innerHTML = 'Updating subscription status...';
+                
+                // First fetch the current user data to get plan type
+                const { data: userData, error: fetchError } = await stack.supabase
+                    .from('users')
+                    .select('plan_type')
+                    .eq('id', userId)
+                    .single();
+                
+                if (fetchError) throw fetchError;
+                
+                // Now update the subscription status
                 const { data, error } = await stack.supabase
-                    .from('users')                    .update({ 
-                        subscription_status: data.plan_type === 'Lifetime Deal' ? 'lifetime_active' : 'active',
+                    .from('users')
+                    .update({ 
+                        subscription_status: userData.plan_type === 'Lifetime Deal' ? 'lifetime_active' : 'active',
                         updated_at: new Date().toISOString()
                     })
                     .eq('id', userId)
