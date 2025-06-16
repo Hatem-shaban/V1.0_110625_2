@@ -550,12 +550,25 @@ const ERROR_MESSAGES = {
 async function createCheckoutSession(email, userId) {
     const priceId = localStorage.getItem('selectedPriceId');
     
-    // Determine if this is a lifetime deal by looking at the price ID directly
+    // Determine plan type from price ID for consistent handling
+    let planType;
+    if (priceId === 'price_lifetime_deal_297') {
+        planType = 'Lifetime Deal';
+    } else if (priceId === 'price_1RYhAlE92IbV5FBUCtOmXIow') {
+        planType = 'Starter';
+    } else if (priceId === 'price_1RYhFGE92IbV5FBUqiKOcIqX') {
+        planType = 'Pro';
+    } else {
+        planType = 'Starter'; // Default
+    }
+    
+    // Set isLifetimeDeal flag based on price ID or localStorage
     const isLifetimeDeal = priceId === 'price_lifetime_deal_297' || localStorage.getItem('isLifetimeDeal') === 'true';
     
     // Log all the details to help debugging
     console.log('DETAILED CHECKOUT INFO:');
     console.log('- priceId from localStorage:', priceId);
+    console.log('- planType determined:', planType);
     console.log('- isLifetimeDeal flag:', isLifetimeDeal);
     console.log('- localStorage.isLifetimeDeal:', localStorage.getItem('isLifetimeDeal'));
     console.log('- detected as lifetime deal:', isLifetimeDeal ? 'YES' : 'NO');
@@ -565,10 +578,14 @@ async function createCheckoutSession(email, userId) {
         console.log('SPECIAL HANDLING: Detected lifetime price ID, forcing payment mode');
     }
     
+    // Store planType in localStorage for potential use in success page
+    localStorage.setItem('selectedPlanType', planType);
+    
     const requestBody = { 
         customerEmail: email, 
         userId,
         priceId: priceId || process.env.STRIPE_PRICE_ID,
+        planType: planType, // Explicitly pass plan type
         isLifetimeDeal: isLifetimeDeal
     };
     

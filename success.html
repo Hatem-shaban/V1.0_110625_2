@@ -32,30 +32,67 @@
                 
                 if (fetchError) throw fetchError;
                   console.log('User data before update:', userData);
-                
-                // Log the actual plan type from the database for debugging
+                  // ENHANCED DEBUGGING: Log the actual plan type from the database
+                console.log('PLAN TYPE DEBUG INFO:');
                 console.log('Current plan_type in database:', userData.plan_type);
                 console.log('Data type of plan_type:', typeof userData.plan_type);
+                console.log('Is plan_type null?', userData.plan_type === null);
+                console.log('Is plan_type empty string?', userData.plan_type === '');
+                console.log('User data dump:', JSON.stringify(userData));
                 
                 let newStatus = 'active';
                 
-                // Check for Lifetime Deal with more robust comparison
-                if (userData.plan_type === 'Lifetime Deal') {
+                // Check for Lifetime Deal with more robust comparison and fallbacks
+                if (userData.plan_type === 'Lifetime Deal' || 
+                    (userData.selected_plan && userData.selected_plan === 'price_lifetime_deal_297')) {
                     console.log('Detected Lifetime Deal plan');
                     newStatus = 'lifetime_active';
+                    
+                    // IMPORTANT FIX: Update plan_type if it's empty but we know it should be a lifetime deal
+                    if (!userData.plan_type) {
+                        console.log('Plan type was empty but detected as Lifetime Deal. Will update.');
+                    }
                 } else {
                     console.log('Using regular subscription status (plan_type: ' + userData.plan_type + ')');
                 }
                 
                 console.log('Setting subscription_status to:', newStatus);
+                  // Prepare update data - add plan_type if needed
+                let updateData = { 
+                    subscription_status: newStatus,
+                    updated_at: new Date().toISOString()
+                };
                 
-                // Now update the subscription status
+                // IMPORTANT: If plan_type is empty but we can determine it, set it now
+                // This is a backup in case the create-checkout-session handler failed to set it
+                if (!userData.plan_type) {
+                    console.log('Plan type is empty, attempting to set based on available information');
+                    
+                    // Try to determine plan type from selected_plan (price ID)
+                    if (userData.selected_plan) {
+                        if (userData.selected_plan === 'price_lifetime_deal_297') {
+                            updateData.plan_type = 'Lifetime Deal';
+                            console.log('Setting missing plan_type to Lifetime Deal based on price ID');
+                        } else if (userData.selected_plan === 'price_1RYhAlE92IbV5FBUCtOmXIow') {
+                            updateData.plan_type = 'Starter';
+                            console.log('Setting missing plan_type to Starter based on price ID');
+                        } else if (userData.selected_plan === 'price_1RYhFGE92IbV5FBUqiKOcIqX') {
+                            updateData.plan_type = 'Pro';
+                            console.log('Setting missing plan_type to Pro based on price ID');
+                        } else {
+                            // Default to Starter if unknown
+                            updateData.plan_type = 'Starter';
+                            console.log('Setting missing plan_type to default Starter');
+                        }
+                    }
+                }
+                
+                console.log('Updating user with:', updateData);
+                
+                // Now update the subscription status and possibly plan_type
                 const { data, error } = await stack.supabase
                     .from('users')
-                    .update({ 
-                        subscription_status: newStatus,
-                        updated_at: new Date().toISOString()
-                    })
+                    .update(updateData)
                     .eq('id', userId)
                     .select()
                     .single();
@@ -69,9 +106,59 @@
                     .eq('id', userId)
                     .single();
 
-                if (verifyError) throw verifyError;                if (verifyUser.subscription_status !== 'active') {
+                if (verifyError) throw verifyError;                console.log('Verification result:', verifyUser);
+                
+                // More robust verification that handles both active and lifetime_active statuses
+                if (verifyUser.subscription_status !== 'active' && verifyUser.subscription_status !== 'lifetime_active') {
+                    console.error('Expected status to be active or lifetime_active but got:', verifyUser.subscription_status);
                     throw new Error('Subscription status update failed');
-                }                // Send welcome email
+                }
+                  // Also verify plan_type was set
+                if (!verifyUser.plan_type) {
+                    console.error('Plan type is still empty after update! This indicates a database permission issue.');
+                    
+                    // LAST RESORT RECOVERY: 
+                    // Try one more time with direct update using selected_plan
+                    try {
+                        console.log('EMERGENCY RECOVERY: Attempting one more update to set plan_type');
+                        
+                        // First get the most up-to-date user data
+                        const { data: currentUser } = await stack.supabase
+                            .from('users')
+                            .select('selected_plan')
+                            .eq('id', userId)
+                            .single();
+                            
+                        // Determine plan type from selected_plan
+                        let recoveredPlanType = 'Starter'; // Default
+                        
+                        if (currentUser?.selected_plan) {
+                            if (currentUser.selected_plan === 'price_lifetime_deal_297') {
+                                recoveredPlanType = 'Lifetime Deal';
+                            } else if (currentUser.selected_plan === 'price_1RYhAlE92IbV5FBUCtOmXIow') {
+                                recoveredPlanType = 'Starter';
+                            } else if (currentUser.selected_plan === 'price_1RYhFGE92IbV5FBUqiKOcIqX') {
+                                recoveredPlanType = 'Pro';
+                            }
+                        }
+                        
+                        console.log('Recovered plan type:', recoveredPlanType);
+                        
+                        // Try one more update with just the plan_type
+                        const { error: finalError } = await stack.supabase
+                            .from('users')
+                            .update({ plan_type: recoveredPlanType })
+                            .eq('id', userId);
+                            
+                        if (finalError) {
+                            console.error('Final recovery attempt failed:', finalError);
+                        } else {
+                            console.log('Recovery appears successful');
+                        }
+                    } catch (recoveryError) {
+                        console.error('Recovery attempt failed:', recoveryError);
+                    }
+                }// Send welcome email
                 const userEmail = localStorage.getItem('userEmail');
                 statusDiv.innerHTML = 'Sending welcome email...';
                 if (userEmail) {

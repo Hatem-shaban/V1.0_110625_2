@@ -31,11 +31,9 @@ exports.handler = async (event, context) => {
     try {
         if (event.httpMethod !== 'POST') {
             throw new Error('Method not allowed');
-        }
-
-        // Parse request body
+        }        // Parse request body
         const requestBody = JSON.parse(event.body);
-        const { customerEmail, userId, priceId } = requestBody;
+        const { customerEmail, userId, priceId, planType: requestedPlanType } = requestBody;
         
         // Check for lifetime deal in multiple ways to be extra safe
         const isLifetimeDeal = 
@@ -48,7 +46,8 @@ exports.handler = async (event, context) => {
             userId, 
             priceId, 
             isLifetimeDeal,
-            isLifetimeDealFromRequest: requestBody.isLifetimeDeal
+            isLifetimeDealFromRequest: requestBody.isLifetimeDeal,
+            requestedPlanType
         });
 
         if (!customerEmail || !userId) {
@@ -71,16 +70,18 @@ exports.handler = async (event, context) => {
                 body: JSON.stringify({ error: 'User not found' })
             };
         }        // Determine plan type and create appropriate checkout session
-        let planType;
+        // If frontend sent a planType, prefer that over determining it here
+        let planType = requestedPlanType || null;
         let sessionParams;
         let subscriptionStatus;
         
         console.log('Price ID received:', priceId);
+        console.log('Plan type from request:', planType);
         
         // HANDLE LIFETIME DEALS - now check for special lifetime price ID
         if (isLifetimeDeal || priceId === 'price_lifetime_deal_297') {
             console.log('Creating LIFETIME DEAL checkout - explicitly setting mode to payment');
-            planType = 'Lifetime Deal';
+            planType = 'Lifetime Deal'; // Always override for lifetime deals
             subscriptionStatus = 'pending_lifetime';
             
             sessionParams = {
@@ -158,29 +159,43 @@ exports.handler = async (event, context) => {
                 .select('plan_type')
                 .eq('id', userId)
                 .single();
-                
-            console.log('Current user data:', userData);
+                  console.log('Current user data:', userData);
+            console.log('Current plan_type value type:', typeof userData.plan_type);
+            console.log('Is plan_type null?', userData.plan_type === null);
+            console.log('Is plan_type empty string?', userData.plan_type === '');
         } catch (e) {
             console.error('Error fetching user data:', e);
         }
         
+        // UPDATE THE USER - WITH ENHANCED DEBUGGING
+        console.log('CRITICAL UPDATE OPERATION STARTING');
+        
         // Update user data with retries
         while (retryCount < maxRetries) {
+            const planTypeValue = planType || 'Starter'; // Ensure we have a fallback
+            console.log('Using planType value:', planTypeValue, 'type:', typeof planTypeValue);
+            
             const updateData = {
                 subscription_status: subscriptionStatus,
                 stripe_session_id: session.id,
-                plan_type: planType,
+                plan_type: planTypeValue, // Use our sanitized value
                 selected_plan: priceId || 'lifetime_deal',
                 updated_at: new Date().toISOString()
             };
             
-            console.log('Update data:', JSON.stringify(updateData));
+            console.log('Update data (full):', JSON.stringify(updateData));
             
-            // Try update
-            const { error } = await supabase
+            // Try update with more specific debugging
+            console.log(`Attempt ${retryCount + 1}/${maxRetries} to update user ${userId}`);
+            const updateResult = await supabase
                 .from('users')
                 .update(updateData)
                 .eq('id', userId);
+                
+            const { error } = updateResult;
+            
+            // Log the full result for debugging
+            console.log('Supabase update result:', JSON.stringify(updateResult));
 
             if (!error) {
                 updateError = null;
