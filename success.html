@@ -27,9 +27,8 @@
                 statusDiv.innerHTML = 'Updating subscription status...';
                 // Update subscription status with explicit return
                 const { data, error } = await stack.supabase
-                    .from('users')
-                    .update({ 
-                        subscription_status: 'active',
+                    .from('users')                    .update({ 
+                        subscription_status: data.plan_type === 'Lifetime Deal' ? 'lifetime_active' : 'active',
                         updated_at: new Date().toISOString()
                     })
                     .eq('id', userId)
