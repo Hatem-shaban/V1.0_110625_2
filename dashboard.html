@@ -43,15 +43,10 @@
     <div class="min-h-screen">
         <nav class="bg-gray-800 p-4">
             <div class="max-w-7xl mx-auto px-4 flex justify-between items-center">
-                <h1 class="text-2xl font-bold">StartupStack Dashboard</h1>
-                  <!-- Add Profile/Logout Section -->
+                <h1 class="text-2xl font-bold">StartupStack Dashboard</h1>                <!-- Add Profile/Logout Section -->
                 <div class="flex items-center space-x-4">
                     <span id="userEmail" class="text-gray-300"></span>
                     <span id="planType" class="bg-blue-900 text-white px-3 py-1 rounded-md text-sm"></span>
-                    <button onclick="showUserDebug()" 
-                           class="bg-purple-600 text-white px-3 py-2 rounded-lg hover:bg-purple-700 transition-colors text-sm">
-                        <i class="fas fa-bug mr-1"></i>Debug
-                    </button>
                     <button onclick="handleLogout()" 
                             class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors">
                         <i class="fas fa-sign-out-alt mr-2"></i>Logout
@@ -186,8 +181,7 @@
             if (user.subscription_status !== 'active') {
                 window.location.replace('/?subscription=required');
                 return;
-            }
-              // Update UI after auth
+            }            // Update UI after auth
             document.getElementById('userEmail').textContent = userEmail;
             
             // Show plan type if available
@@ -204,43 +198,6 @@
                     planTypeElement.classList.add('bg-red-600');
                 }
             }
-            
-            // Debug function for user data
-            window.showUserDebug = async function() {
-                try {
-                    // Get the latest data
-                    const { data: latestUser, error: refreshError } = await stack.supabase
-                        .from('users')
-                        .select('*')
-                        .eq('id', userId)
-                        .single();
-                        
-                    if (refreshError) throw refreshError;
-                    
-                    // Create a debug modal
-                    const modal = document.createElement('div');
-                    modal.className = 'fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4';
-                    modal.innerHTML = `
-                        <div class="bg-gray-800 rounded-lg p-6 max-w-3xl w-full max-h-[80vh] overflow-auto">
-                            <h2 class="text-xl font-bold mb-4">User Debug Info</h2>
-                            <div class="mb-4">
-                                <span class="text-green-400 font-bold">Plan Type:</span> 
-                                <span class="bg-gray-700 px-2 py-1 rounded">${latestUser.plan_type || 'EMPTY'}</span>
-                            </div>
-                            <div class="overflow-x-auto">
-                                <pre class="text-xs bg-gray-900 p-4 rounded whitespace-pre-wrap">${JSON.stringify(latestUser, null, 2)}</pre>
-                            </div>
-                            <button class="mt-4 bg-gray-700 text-white px-4 py-2 rounded hover:bg-gray-600">Close</button>
-                        </div>
-                    `;
-                    
-                    document.body.appendChild(modal);
-                    modal.querySelector('button').addEventListener('click', () => modal.remove());
-                } catch (err) {
-                    console.error('Debug error:', err);
-                    alert('Error showing debug info');
-                }
-            };
             
             // Enable all AI tool buttons
             document.querySelectorAll('[data-ai-tool]').forEach(button => {
