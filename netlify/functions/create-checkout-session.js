@@ -53,8 +53,10 @@ exports.handler = async (event, context) => {
                 statusCode: 404,
                 headers,
                 body: JSON.stringify({ error: 'User not found' })
-            };
-        }        // Determine checkout mode and plan type based on the price ID        const priceIdToPlan = {
+            };        }
+        
+        // Determine checkout mode and plan type based on the price ID
+        const priceIdToPlan = {
             'price_1RYhAlE92IbV5FBUCtOmXIow': { type: 'Starter', isLifetime: false },
             'price_1RYhFGE92IbV5FBUqiKOcIqX': { type: 'Pro', isLifetime: false }
         };
@@ -83,14 +85,13 @@ exports.handler = async (event, context) => {
         let updateError;
 
         while (retryCount < maxRetries) {
-            const { error } = await supabase
-                .from('users')                .update({
+            const { error } = await supabase                .from('users')
+                .update({
                     subscription_status: isLifetimePlan ? 'pending_lifetime' : 'pending_activation',
                     stripe_session_id: session.id,
                     plan_type: planInfo.type,
                     selected_plan: priceId || process.env.STRIPE_PRICE_ID,
-                    updated_at: new Date().toISOString(),
-                    plan_type: planType
+                    updated_at: new Date().toISOString()
                 })
                 .eq('id', userId);
 
