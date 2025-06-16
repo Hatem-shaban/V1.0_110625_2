@@ -60,23 +60,24 @@ exports.handler = async (event, context) => {
         // Log the priceId for debugging
         console.log('Processing checkout with priceId:', priceId);
         
-        switch(priceId) {
-            case 'price_1RYhAlE92IbV5FBUCtOmXIow':
-                planType = 'Starter';
-                break;
-            case 'price_1RYhFGE92IbV5FBUqiKOcIqX':
-                planType = 'Pro';
-                break;
-            case 'price_lifetime': // Replace with actual Lifetime Deal price ID when available
-                planType = 'Lifetime Deal';
-                isLifetimePlan = true;
-                break;
-            default:
-                planType = 'Starter';
+        // Explicitly match price IDs to plan types
+        if (priceId === 'price_1RYhAlE92IbV5FBUCtOmXIow') {
+            console.log('Matched Starter plan');
+            planType = 'Starter';
+        } else if (priceId === 'price_1RYhFGE92IbV5FBUqiKOcIqX') {
+            console.log('Matched Pro plan');
+            planType = 'Pro';
+        } else if (priceId === 'price_lifetime') { // Lifetime deal ID
+            console.log('Matched Lifetime Deal plan');
+            planType = 'Lifetime Deal';
+            isLifetimePlan = true;
+        } else {
+            console.log('No match, defaulting to Starter plan');
+            planType = 'Starter';
         }
         
-        // Log the determined plan type
-        console.log('Determined plan type:', planType, 'isLifetimePlan:', isLifetimePlan);
+        // Double check the final value to ensure it's what we expect
+        console.log('Final plan_type value:', planType);
         
         // Create Stripe checkout session with specified price ID
         const session = await stripe.checkout.sessions.create({
@@ -96,16 +97,27 @@ exports.handler = async (event, context) => {
         });        // Update user status with retry logic
         let retryCount = 0;
         const maxRetries = 3;
-        let updateError;
-
+        let updateError;        // Log the values we're about to use for update
+        console.log('Updating user with the following values:');
+        console.log('- plan_type:', planType);
+        console.log('- selected_plan:', priceId || process.env.STRIPE_PRICE_ID);
+        console.log('- subscription_status:', isLifetimePlan ? 'pending_lifetime' : 'pending_activation');
+        
         while (retryCount < maxRetries) {
-            const { error } = await supabase                .from('users')                .update({
-                    subscription_status: isLifetimePlan ? 'pending_lifetime' : 'pending_activation',
-                    stripe_session_id: session.id,
-                    plan_type: planType,
-                    selected_plan: priceId || process.env.STRIPE_PRICE_ID,
-                    updated_at: new Date().toISOString()
-                })
+            // Create update object explicitly to ensure clarity
+            const updateData = {
+                subscription_status: isLifetimePlan ? 'pending_lifetime' : 'pending_activation',
+                stripe_session_id: session.id,
+                plan_type: planType,  // This should be "Starter", "Pro", or "Lifetime Deal"
+                selected_plan: priceId || process.env.STRIPE_PRICE_ID,
+                updated_at: new Date().toISOString()
+            };
+            
+            console.log('Update data:', JSON.stringify(updateData));
+            
+            const { error } = await supabase
+                .from('users')
+                .update(updateData)
                 .eq('id', userId);
 
             if (!error) {
