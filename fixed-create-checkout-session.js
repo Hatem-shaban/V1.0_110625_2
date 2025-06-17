@@ -90,11 +90,10 @@ exports.handler = async (event, context) => {
         else {
             console.log('Creating SUBSCRIPTION checkout with priceId:', priceId);
             subscriptionStatus = 'pending_activation';
-            
-            // Determine plan type based on the price ID
+              // Determine plan type based on the price ID
             if (priceId === 'price_1RYhAlE92IbV5FBUCtOmXIow') {
                 planType = 'Starter';
-            } else if (priceId === 'price_1RYhFGE92IbV5FBUqiKOcIqX') {
+            } else if (priceId === 'price_1RSdrmE92IbV5FBUV1zE2VhD') {
                 planType = 'Pro';
             } else {
                 planType = 'Starter'; // Default

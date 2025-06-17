@@ -127,14 +127,9 @@ exports.handler = async (event, context) => {
             console.log('Determining plan type from price ID:', priceId);
             if (priceId === 'price_1RYhAlE92IbV5FBUCtOmXIow') {
                 planType = 'Starter';
-                console.log('Matched to Starter plan');
-            } else if (priceId === 'price_1RSdrmE92IbV5FBUV1zE2VhD') {
+                console.log('Matched to Starter plan');            } else if (priceId === 'price_1RSdrmE92IbV5FBUV1zE2VhD') {
                 planType = 'Pro'; 
                 console.log('Matched to Pro plan');
-            } else if (priceId === 'price_1RYhFGE92IbV5FBUqiKOcIqX') {
-                // Keep this for backward compatibility
-                planType = 'Pro';
-                console.log('Matched to Pro plan (legacy ID)');
             } else {
                 console.log('No price ID match found, defaulting to Starter');
                 planType = 'Starter'; // Default

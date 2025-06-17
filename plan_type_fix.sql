@@ -50,7 +50,8 @@ UPDATE users
 SET plan_type = 
   CASE
     WHEN selected_plan = 'price_1RasluE92IbV5FBUlp01YVZe' THEN 'Yearly Deal'
-    WHEN selected_plan = 'price_1RYhAlE92IbV5FBUCtOmXIow' THEN 'Starter'    WHEN selected_plan = 'price_1RSdrmE92IbV5FBUV1zE2VhD' THEN 'Pro'
+    WHEN selected_plan = 'price_1RYhAlE92IbV5FBUCtOmXIow' THEN 'Starter'   
+     WHEN selected_plan = 'price_1RSdrmE92IbV5FBUV1zE2VhD' THEN 'Pro'
     ELSE 'Starter'
   END
 WHERE plan_type IS NULL OR plan_type = '';

@@ -89,13 +89,9 @@
                             console.log('Recovery: setting plan_type to Yearly Deal');
                         } else if (userData.selected_plan === 'price_1RYhAlE92IbV5FBUCtOmXIow') {
                             updateData.plan_type = 'Starter';
-                            console.log('Recovery: setting plan_type to Starter');
-                        } else if (userData.selected_plan === 'price_1RSdrmE92IbV5FBUV1zE2VhD') {
+                            console.log('Recovery: setting plan_type to Starter');                        } else if (userData.selected_plan === 'price_1RSdrmE92IbV5FBUV1zE2VhD') {
                             updateData.plan_type = 'Pro';
                             console.log('Recovery: setting plan_type to Pro');
-                        } else if (userData.selected_plan === 'price_1RYhFGE92IbV5FBUqiKOcIqX') {
-                            updateData.plan_type = 'Pro';
-                            console.log('Recovery: setting plan_type to Pro (legacy ID)');
                         } else {
                             // Default to Starter if unknown
                             updateData.plan_type = 'Starter';
@@ -180,11 +176,8 @@
                         let recoveredPlanType = 'Starter'; // Default
                         
                         if (currentUser?.selected_plan) {                            if (currentUser.selected_plan === 'price_1RasluE92IbV5FBUlp01YVZe') {
-                                recoveredPlanType = 'Yearly Deal';
-                            } else if (currentUser.selected_plan === 'price_1RYhAlE92IbV5FBUCtOmXIow') {
+                                recoveredPlanType = 'Yearly Deal';                            } else if (currentUser.selected_plan === 'price_1RYhAlE92IbV5FBUCtOmXIow') {
                                 recoveredPlanType = 'Starter';
-                            } else if (currentUser.selected_plan === 'price_1RYhFGE92IbV5FBUqiKOcIqX') {
-                                recoveredPlanType = 'Pro';
                             }
                         }
                         
