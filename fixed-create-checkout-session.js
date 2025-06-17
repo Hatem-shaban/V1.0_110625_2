@@ -6,7 +6,7 @@ if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
     throw new Error('Missing Supabase configuration');
 }
 
-// Initialize Supabase with proper error handling
+// Initialize Supabase client
 const supabase = createClient(
     process.env.SUPABASE_URL,
     process.env.SUPABASE_ANON_KEY,
@@ -17,6 +17,18 @@ const supabase = createClient(
     }
 );
 
+// Initialize a service role client to bypass RLS policies if available
+const supabaseAdmin = process.env.SUPABASE_SERVICE_ROLE_KEY ? 
+    createClient(
+        process.env.SUPABASE_URL,
+        process.env.SUPABASE_SERVICE_ROLE_KEY,
+        {
+            auth: {
+                persistSession: false
+            }
+        }
+    ) : supabase;
+
 exports.handler = async (event, context) => {
     const headers = {
         'Access-Control-Allow-Origin': '*',
@@ -24,36 +36,43 @@ exports.handler = async (event, context) => {
         'Access-Control-Allow-Methods': 'POST, OPTIONS'
     };
 
+    // Handle preflight requests
     if (event.httpMethod === 'OPTIONS') {
         return { statusCode: 200, headers };
     }
 
     try {
+        // Only allow POST requests
         if (event.httpMethod !== 'POST') {
-            throw new Error('Method not allowed');
+            return {
+                statusCode: 405,
+                headers,
+                body: JSON.stringify({ error: 'Method not allowed' })
+            };
         }
 
         // Parse request body
         const requestBody = JSON.parse(event.body);
-        const { customerEmail, userId, priceId } = requestBody;        // Explicitly check for the isYearlyDeal flag
-        const isYearlyDeal = requestBody.isYearlyDeal === true;
-        
-        console.log('Request body parsed:', { customerEmail, userId, priceId, isYearlyDeal });
+        const { customerEmail, userId, priceId } = requestBody;
 
-        if (!customerEmail || !userId) {
-            throw new Error('Missing required fields');
+        // Validate required fields
+        if (!customerEmail || !userId || !priceId) {
+            return {
+                statusCode: 400,
+                headers,
+                body: JSON.stringify({ error: 'Missing required fields: customerEmail, userId, or priceId' })
+            };
         }
 
         // Verify user exists
         const { data: existingUser, error: userError } = await supabase
             .from('users')
-            .select('id, email, subscription_status')
+            .select('id, email')
             .eq('id', userId)
             .eq('email', customerEmail)
             .single();
 
         if (userError) {
-            console.error('User verification error:', userError);
             return {
                 statusCode: 404,
                 headers,
@@ -61,151 +80,72 @@ exports.handler = async (event, context) => {
             };
         }
 
-        // Determine plan type and create appropriate checkout session
-        let planType;
-        let sessionParams;
-        let subscriptionStatus;        // HANDLE YEARLY DEALS
-        if (isYearlyDeal) {
-            console.log('Creating YEARLY DEAL checkout');
-            planType = 'Yearly Deal';
-            subscriptionStatus = 'pending_lifetime';
-            
-            sessionParams = {
-                payment_method_types: ['card'],
-                mode: 'payment',  // One-time payment
-                line_items: [{
-                    price_data: {
-                        currency: 'usd',
-                        product_data: {
-                            name: 'StartupStack Lifetime Access',
-                            description: 'One-time payment for lifetime access to all StartupStack tools',
-                        },
-                        unit_amount: 29700, // $297.00
-                    },
-                    quantity: 1,
-                }]
-            };
-        } 
-        // HANDLE REGULAR SUBSCRIPTIONS
-        else {
-            console.log('Creating SUBSCRIPTION checkout with priceId:', priceId);
-            subscriptionStatus = 'pending_activation';
-              // Determine plan type based on the price ID
-            if (priceId === 'price_1RYhAlE92IbV5FBUCtOmXIow') {
-                planType = 'Starter';
-            } else if (priceId === 'price_1RSdrmE92IbV5FBUV1zE2VhD') {
-                planType = 'Pro';
-            } else {
-                planType = 'Starter'; // Default
-            }
-            
-            sessionParams = {
-                payment_method_types: ['card'],
-                mode: 'subscription',
-                line_items: [{
-                    price: priceId || process.env.STRIPE_PRICE_ID,
-                    quantity: 1,
-                }]
+        // Direct mapping of price IDs to plan types
+        const PRICE_TO_PLAN_MAP = {
+            'price_1RasluE92IbV5FBUlp01YVZe': { name: 'Yearly Deal', status: 'yearly_active' },
+            'price_1RYhAlE92IbV5FBUCtOmXIow': { name: 'Starter', status: 'pending_activation' },
+            'price_1RSdrmE92IbV5FBUV1zE2VhD': { name: 'Pro', status: 'pending_activation' }
+        };
+
+        // Get plan details from the price ID
+        const planDetails = PRICE_TO_PLAN_MAP[priceId];
+        
+        if (!planDetails) {
+            return {
+                statusCode: 400,
+                headers,
+                body: JSON.stringify({ error: 'Invalid price ID' })
             };
         }
-        
-        // Add common parameters
-        sessionParams = {
-            ...sessionParams,
+
+        // Create checkout session with the correct mode
+        const sessionParams = {
+            payment_method_types: ['card'],
+            mode: 'subscription',
+            line_items: [{
+                price: priceId,
+                quantity: 1
+            }],
             success_url: `${process.env.URL}/success.html?session_id={CHECKOUT_SESSION_ID}&userId=${userId}`,
             cancel_url: `${process.env.URL}?checkout=cancelled`,
             customer_email: customerEmail,
             metadata: {
                 userId,
-                planType,
-                priceId: priceId || 'lifetime_deal'
+                planType: planDetails.name,
+                priceId: priceId
             }
         };
-        
-        console.log('Creating Stripe checkout session with mode:', sessionParams.mode);
+
+        // Create the Stripe checkout session
         const session = await stripe.checkout.sessions.create(sessionParams);
-        console.log('Checkout session created:', session.id);
 
-        // Update user in the database
-        let retryCount = 0;
-        const maxRetries = 3;
-        let updateError;
-        
-        console.log('Updating user with:', { 
-            plan_type: planType, 
-            selected_plan: priceId || 'lifetime_deal',
-            subscription_status: subscriptionStatus
-        });
-
-        // Try to get current user data for debugging
-        try {
-            const { data: userData } = await supabase
-                .from('users')
-                .select('plan_type')
-                .eq('id', userId)
-                .single();
-                
-            console.log('Current user data:', userData);
-        } catch (e) {
-            console.error('Error fetching user data:', e);
-        }
-        
-        // Update user data with retries
-        while (retryCount < maxRetries) {
-            const updateData = {
-                subscription_status: subscriptionStatus,
+        // Update user in the database with the new plan details
+        const { error: updateError } = await supabaseAdmin
+            .from('users')
+            .update({
+                subscription_status: 'pending_activation',
+                plan_type: planDetails.name,
+                selected_plan: priceId,
                 stripe_session_id: session.id,
-                plan_type: planType,
-                selected_plan: priceId || 'lifetime_deal',
                 updated_at: new Date().toISOString()
-            };
-            
-            console.log('Update data:', JSON.stringify(updateData));
-            
-            // Try update
-            const { error } = await supabase
-                .from('users')
-                .update(updateData)
-                .eq('id', userId);
-
-            if (!error) {
-                updateError = null;
-                
-                // Verify update
-                const { data: verifyData, error: verifyError } = await supabase
-                    .from('users')
-                    .select('plan_type, subscription_status')
-                    .eq('id', userId)
-                    .single();
-                    
-                if (!verifyError) {
-                    console.log('Verified user update:', verifyData);
-                }
-                
-                break;
-            }
-
-            updateError = error;
-            console.error('Update error:', error);
-            retryCount++;
-            
-            // Wait before retry
-            await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
-        }
+            })
+            .eq('id', userId);
 
         if (updateError) {
-            console.error('Error updating user after retries:', updateError);
+            console.error('Error updating user:', updateError);
+            // Continue with the checkout even if the update fails
+            // The success page will handle setting plan_type as a fallback
         }
 
         return {
             statusCode: 200,
             headers,
-            body: JSON.stringify({ 
+            body: JSON.stringify({
                 id: session.id,
                 userId: userId,
                 success: true,
-                plan_type: planType,
-                mode: sessionParams.mode
+                plan_type: planDetails.name,
+                mode: 'subscription'
             })
         };
 
@@ -214,7 +154,7 @@ exports.handler = async (event, context) => {
         return {
             statusCode: error.statusCode || 500,
             headers,
-            body: JSON.stringify({ 
+            body: JSON.stringify({
                 error: error.message,
                 details: process.env.NODE_ENV === 'development' ? error : undefined
             })

@@ -61,19 +61,26 @@
                     console.log('Using regular subscription status (plan_type: ' + userData.plan_type + ')');
                 }
                 
-                console.log('Setting subscription_status to:', newStatus);                // Prepare update data - add plan_type if needed
+                console.log('Setting subscription_status to:', newStatus);                // Prepare update data - ALWAYS ENFORCE plan_type based on selected_plan
                 let updateData = { 
                     subscription_status: newStatus,
                     updated_at: new Date().toISOString()
                 };
                 
-                // Use stored plan type from localStorage if available
-                if (storedPlanType && (!userData.plan_type || userData.plan_type === '')) {
-                    console.log('CRITICAL FIX: Using stored plan type from localStorage:', storedPlanType);
+                // SIMPLIFIED APPROACH: Always set plan_type based on selected_plan
+                // This ensures consistency across the application
+                if (userData.selected_plan === 'price_1RasluE92IbV5FBUlp01YVZe') {
+                    console.log('ENFORCING plan type: Yearly Deal based on selected_plan');
+                    updateData.plan_type = 'Yearly Deal';
+                } else if (userData.selected_plan === 'price_1RYhAlE92IbV5FBUCtOmXIow') {
+                    console.log('ENFORCING plan type: Starter based on selected_plan');
+                    updateData.plan_type = 'Starter';
+                } else if (userData.selected_plan === 'price_1RSdrmE92IbV5FBUV1zE2VhD') {
+                    console.log('ENFORCING plan type: Pro based on selected_plan');
+                    updateData.plan_type = 'Pro';
+                } else if (storedPlanType) {
+                    console.log('FALLBACK: Using stored plan type from localStorage:', storedPlanType);
                     updateData.plan_type = storedPlanType;
-                } else if (debugPlanType && (!userData.plan_type || userData.plan_type === '')) {
-                    console.log('CRITICAL FIX: Using debug plan type from localStorage:', debugPlanType);
-                    updateData.plan_type = debugPlanType;
                 }
                 
                 // IMPORTANT: If plan_type is empty but we can determine it, set it now
@@ -171,13 +178,20 @@
                             .select('selected_plan')
                             .eq('id', userId)
                             .single();
-                            
-                        // Determine plan type from selected_plan
+                              // DIRECT plan type mapping from selected_plan
                         let recoveredPlanType = 'Starter'; // Default
                         
-                        if (currentUser?.selected_plan) {                            if (currentUser.selected_plan === 'price_1RasluE92IbV5FBUlp01YVZe') {
-                                recoveredPlanType = 'Yearly Deal';                            } else if (currentUser.selected_plan === 'price_1RYhAlE92IbV5FBUCtOmXIow') {
+                        if (currentUser?.selected_plan) {
+                            // Simple, direct mapping for maximum reliability
+                            if (currentUser.selected_plan === 'price_1RasluE92IbV5FBUlp01YVZe') {
+                                recoveredPlanType = 'Yearly Deal';
+                                console.log('Recovery: Mapped to Yearly Deal');
+                            } else if (currentUser.selected_plan === 'price_1RYhAlE92IbV5FBUCtOmXIow') {
                                 recoveredPlanType = 'Starter';
+                                console.log('Recovery: Mapped to Starter');
+                            } else if (currentUser.selected_plan === 'price_1RSdrmE92IbV5FBUV1zE2VhD') {
+                                recoveredPlanType = 'Pro';
+                                console.log('Recovery: Mapped to Pro');
                             }
                         }
                         

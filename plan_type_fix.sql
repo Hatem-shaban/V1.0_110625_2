@@ -1,23 +1,21 @@
--- Function to directly update plan_type for a user
--- This bypasses RLS policies by using security definer
-CREATE OR REPLACE FUNCTION admin_set_plan_type(user_id UUID, new_plan_type TEXT)
-RETURNS VOID
-LANGUAGE plpgsql
-SECURITY DEFINER -- This makes the function execute with the privileges of the creator (should be superuser)
-SET search_path = public
-AS $$
+-- Update constraint to allow "Yearly Deal" as a valid plan type
+DO $$
 BEGIN
-  UPDATE public.users
-  SET plan_type = new_plan_type,
-      updated_at = NOW()
-  WHERE id = user_id;
-END;
-$$;
+  -- Drop the constraint if it exists
+  BEGIN
+    ALTER TABLE users DROP CONSTRAINT IF EXISTS valid_plan_type;
+  EXCEPTION
+    WHEN undefined_object THEN
+      RAISE NOTICE 'Constraint valid_plan_type does not exist, will create new one';
+  END;
+  
+  -- Create the constraint with the updated values
+  ALTER TABLE users
+  ADD CONSTRAINT valid_plan_type
+  CHECK (plan_type IN ('Free', 'Starter', 'Pro', 'Yearly Deal'));
+END $$;
 
--- Grant execute permission to authenticated users and anon
-GRANT EXECUTE ON FUNCTION admin_set_plan_type TO authenticated, anon;
-
--- Create a trigger to log plan_type changes
+-- Create a logging function to track plan type changes
 CREATE TABLE IF NOT EXISTS plan_type_change_log (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL,
@@ -27,6 +25,7 @@ CREATE TABLE IF NOT EXISTS plan_type_change_log (
   changed_by TEXT
 );
 
+-- Create or replace the logging trigger function
 CREATE OR REPLACE FUNCTION log_plan_type_change()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -40,47 +39,78 @@ BEGIN
 END;
 $$;
 
-CREATE TRIGGER log_plan_type_changes
-AFTER UPDATE ON users
-FOR EACH ROW
-EXECUTE FUNCTION log_plan_type_change();
+-- Create the trigger if it doesn't exist
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger WHERE tgname = 'log_plan_type_changes'
+  ) THEN
+    CREATE TRIGGER log_plan_type_changes
+    AFTER UPDATE ON users
+    FOR EACH ROW
+    EXECUTE FUNCTION log_plan_type_change();
+  END IF;
+END $$;
 
--- Update all existing records with blank plan_type based on selected_plan
+-- DIRECT PLAN TYPE MANAGEMENT
+-- Simple, clear approach to ensure plan_types match selected_plan values
+
+-- 1. Show current state for reference (before update)
+SELECT 
+  id, 
+  email, 
+  plan_type, 
+  selected_plan, 
+  subscription_status 
+FROM 
+  users
+ORDER BY 
+  created_at DESC
+LIMIT 10;
+
+-- 2. Direct mapping of price IDs to plan types
+-- This ensures plan_type is always aligned with the selected_plan
 UPDATE users
-SET plan_type = 
-  CASE
+SET 
+  plan_type = CASE
     WHEN selected_plan = 'price_1RasluE92IbV5FBUlp01YVZe' THEN 'Yearly Deal'
-    WHEN selected_plan = 'price_1RYhAlE92IbV5FBUCtOmXIow' THEN 'Starter'   
-     WHEN selected_plan = 'price_1RSdrmE92IbV5FBUV1zE2VhD' THEN 'Pro'
-    ELSE 'Starter'
-  END
-WHERE plan_type IS NULL OR plan_type = '';
-
--- Alter the constraint to allow the new Yearly Deal plan type
-ALTER TABLE public.users DROP CONSTRAINT IF EXISTS valid_plan_type;
-ALTER TABLE public.users ADD CONSTRAINT valid_plan_type 
-CHECK (plan_type IN ('Starter', 'Pro', 'Yearly Deal', NULL));
-
--- Update ALL users to set their plan_type based on their selected_plan
--- This will fix any existing incorrect plan types
-UPDATE users
-SET plan_type = 
-  CASE
-    WHEN selected_plan = 'price_1RasluE92IbV5FBUlp01YVZe' THEN 'Yearly Deal'
-    WHEN selected_plan = 'price_1RYhAlE92IbV5FBUCtOmXIow' THEN 'Starter'   
+    WHEN selected_plan = 'price_1RYhAlE92IbV5FBUCtOmXIow' THEN 'Starter'
     WHEN selected_plan = 'price_1RSdrmE92IbV5FBUV1zE2VhD' THEN 'Pro'
-    ELSE plan_type -- Keep current value if no matching price ID
+    ELSE plan_type -- Keep existing plan_type if no selected_plan match
   END,
   updated_at = NOW()
-WHERE selected_plan IS NOT NULL;
+WHERE 
+  selected_plan IS NOT NULL;
 
--- Also update subscription_status for Yearly Deal users
+-- 3. Set the correct subscription_status for yearly plans
 UPDATE users
-SET subscription_status = 'yearly_active'
-WHERE plan_type = 'Yearly Deal' AND subscription_status = 'active';
+SET 
+  subscription_status = 'yearly_active'
+WHERE 
+  plan_type = 'Yearly Deal' AND
+  subscription_status IS DISTINCT FROM 'yearly_active';
 
--- Show the results for verification
-SELECT id, email, plan_type, selected_plan, subscription_status
-FROM users
-ORDER BY created_at DESC
+-- 4. Verify the changes were applied correctly
+SELECT 
+  id, 
+  email, 
+  plan_type, 
+  selected_plan, 
+  subscription_status 
+FROM 
+  users
+ORDER BY 
+  updated_at DESC
 LIMIT 10;
+
+-- 5. Summary of plan types and selected plans for verification
+SELECT 
+  plan_type, 
+  selected_plan, 
+  COUNT(*) as user_count
+FROM 
+  users
+GROUP BY 
+  plan_type, selected_plan
+ORDER BY 
+  plan_type;
