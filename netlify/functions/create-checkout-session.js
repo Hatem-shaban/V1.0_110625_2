@@ -54,27 +54,24 @@ exports.handler = async (event, context) => {
         console.log('-------------------------------------------');
         
         console.log(`priceId: "${priceId}" (${typeof priceId})`);
-        console.log(`requestedPlanType: "${requestedPlanType}" (${typeof requestedPlanType})`);
-        console.log(`isLifetimeDeal flag: ${requestBody.isLifetimeDeal} (${typeof requestBody.isLifetimeDeal})`);
+        console.log(`requestedPlanType: "${requestedPlanType}" (${typeof requestedPlanType})`);        console.log(`isYearlyDeal flag: ${requestBody.isYearlyDeal} (${typeof requestBody.isYearlyDeal})`);
         
         // Check exact values against known good ones
         console.log('priceId matches:');
-        console.log('- Is price_lifetime_deal_297?', priceId === 'price_lifetime_deal_297');
+        console.log('- Is price_1RasluE92IbV5FBUlp01YVZe?', priceId === 'price_1RasluE92IbV5FBUlp01YVZe');
         console.log('- Is price_1RYhAlE92IbV5FBUCtOmXIow?', priceId === 'price_1RYhAlE92IbV5FBUCtOmXIow');
         console.log('- Is price_1RSdrmE92IbV5FBUV1zE2VhD?', priceId === 'price_1RSdrmE92IbV5FBUV1zE2VhD');
-        
-        // Check for lifetime deal in multiple ways to be extra safe
-        const isLifetimeDeal = 
-            requestBody.isLifetimeDeal === true || 
-            priceId === 'price_lifetime_deal_297';
+          // Check for yearly deal in multiple ways to be extra safe
+        const isYearlyDeal = 
+            requestBody.isYearlyDeal === true || 
+            priceId === 'price_1RasluE92IbV5FBUlp01YVZe';
             
-        console.log('Full request body:', JSON.stringify(requestBody, null, 2));
-        console.log('Parsed checkout info:', { 
+        console.log('Full request body:', JSON.stringify(requestBody, null, 2));        console.log('Parsed checkout info:', { 
             customerEmail, 
             userId, 
             priceId, 
-            isLifetimeDeal,
-            isLifetimeDealFromRequest: requestBody.isLifetimeDeal,
+            isYearlyDeal,
+            isYearlyDealFromRequest: requestBody.isYearlyDeal,
             requestedPlanType
         });
         console.log('-------------------------------------------');
@@ -106,25 +103,17 @@ exports.handler = async (event, context) => {
         
         console.log('Price ID received:', priceId);
         console.log('Plan type from request:', planType);
-        
-        // HANDLE LIFETIME DEALS - now check for special lifetime price ID
-        if (isLifetimeDeal || priceId === 'price_lifetime_deal_297') {
-            console.log('Creating LIFETIME DEAL checkout - explicitly setting mode to payment');
-            planType = 'Lifetime Deal'; // Always override for lifetime deals
-            subscriptionStatus = 'pending_lifetime';
+          // HANDLE YEARLY DEALS - check for special yearly price ID
+        if (isYearlyDeal || priceId === 'price_1RasluE92IbV5FBUlp01YVZe') {
+            console.log('Creating YEARLY DEAL checkout - setting mode to subscription');
+            planType = 'Yearly Deal'; // Always override for yearly deals
+            subscriptionStatus = 'pending_activation';
             
             sessionParams = {
                 payment_method_types: ['card'],
-                mode: 'payment',  // One-time payment
+                mode: 'subscription',  // Yearly subscription
                 line_items: [{
-                    price_data: {
-                        currency: 'usd',
-                        product_data: {
-                            name: 'StartupStack Lifetime Access',
-                            description: 'One-time payment for lifetime access to all StartupStack tools',
-                        },
-                        unit_amount: 29700, // $297.00
-                    },
+                    price: 'price_1RasluE92IbV5FBUlp01YVZe',
                     quantity: 1,
                 }]
             };

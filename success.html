@@ -47,17 +47,15 @@
                 console.log('Plan type from localStorage serverConfirmedPlanType:', storedPlanType);
                 console.log('Plan type from localStorage debugSelectedPlanType:', debugPlanType);
                 
-                let newStatus = 'active';
-                
-                // Check for Lifetime Deal with more robust comparison and fallbacks
-                if (userData.plan_type === 'Lifetime Deal' || 
-                    (userData.selected_plan && userData.selected_plan === 'price_lifetime_deal_297')) {
-                    console.log('Detected Lifetime Deal plan');
-                    newStatus = 'lifetime_active';
+                let newStatus = 'active';                // Check for Yearly Deal with more robust comparison and fallbacks
+                if (userData.plan_type === 'Yearly Deal' || 
+                    (userData.selected_plan && userData.selected_plan === 'price_1RasluE92IbV5FBUlp01YVZe')) {
+                    console.log('Detected Yearly Deal plan');
+                    newStatus = 'yearly_active';
                     
-                    // IMPORTANT FIX: Update plan_type if it's empty but we know it should be a lifetime deal
+                    // IMPORTANT FIX: Update plan_type if it's empty but we know it should be a yearly deal
                     if (!userData.plan_type) {
-                        console.log('Plan type was empty but detected as Lifetime Deal. Will update.');
+                        console.log('Plan type was empty but detected as Yearly Deal. Will update.');
                     }
                 } else {
                     console.log('Using regular subscription status (plan_type: ' + userData.plan_type + ')');
@@ -86,10 +84,9 @@
                     if (userData.selected_plan) {
                         // UPDATED PRICE ID MAPPING
                         console.log('Recovery: determining plan from price ID:', userData.selected_plan);
-                        
-                        if (userData.selected_plan === 'price_lifetime_deal_297') {
-                            updateData.plan_type = 'Lifetime Deal';
-                            console.log('Recovery: setting plan_type to Lifetime Deal');
+                          if (userData.selected_plan === 'price_1RasluE92IbV5FBUlp01YVZe') {
+                            updateData.plan_type = 'Yearly Deal';
+                            console.log('Recovery: setting plan_type to Yearly Deal');
                         } else if (userData.selected_plan === 'price_1RYhAlE92IbV5FBUCtOmXIow') {
                             updateData.plan_type = 'Starter';
                             console.log('Recovery: setting plan_type to Starter');
@@ -141,9 +138,8 @@
                     console.error('Plan type is still empty after update! Attempting direct SQL fix...');
                     
                     try {
-                        // Try to use stored values for plan type
-                        const finalPlanType = storedPlanType || debugPlanType || 
-                                             (userData.selected_plan === 'price_lifetime_deal_297' ? 'Lifetime Deal' : 
+                        // Try to use stored values for plan type                        const finalPlanType = storedPlanType || debugPlanType || 
+                                             (userData.selected_plan === 'price_1RasluE92IbV5FBUlp01YVZe' ? 'Yearly Deal' : 
                                               userData.selected_plan === 'price_1RYhAlE92IbV5FBUCtOmXIow' ? 'Starter' :
                                               userData.selected_plan === 'price_1RSdrmE92IbV5FBUV1zE2VhD' ? 'Pro' : 'Starter');
                         
@@ -183,9 +179,8 @@
                         // Determine plan type from selected_plan
                         let recoveredPlanType = 'Starter'; // Default
                         
-                        if (currentUser?.selected_plan) {
-                            if (currentUser.selected_plan === 'price_lifetime_deal_297') {
-                                recoveredPlanType = 'Lifetime Deal';
+                        if (currentUser?.selected_plan) {                            if (currentUser.selected_plan === 'price_1RasluE92IbV5FBUlp01YVZe') {
+                                recoveredPlanType = 'Yearly Deal';
                             } else if (currentUser.selected_plan === 'price_1RYhAlE92IbV5FBUCtOmXIow') {
                                 recoveredPlanType = 'Starter';
                             } else if (currentUser.selected_plan === 'price_1RYhFGE92IbV5FBUqiKOcIqX') {

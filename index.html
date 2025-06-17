@@ -58,11 +58,10 @@
                 console.log('Price ID from dataset:', priceId);
                 console.log('Button classList:', Array.from(currentButton.classList));
                 console.log('Button HTML:', currentButton.outerHTML);
-                
-                // Determine plan directly from priceId for immediate validation
+                  // Determine plan directly from priceId for immediate validation
                 let selectedPlanType;
-                if (priceId === 'price_lifetime_deal_297') {
-                    selectedPlanType = 'Lifetime Deal';
+                if (priceId === 'price_1RasluE92IbV5FBUlp01YVZe') {
+                    selectedPlanType = 'Yearly Deal';
                 } else if (priceId === 'price_1RYhAlE92IbV5FBUCtOmXIow') {
                     selectedPlanType = 'Starter';
                 } else if (priceId === 'price_1RSdrmE92IbV5FBUV1zE2VhD') {
@@ -345,24 +344,23 @@
                         <i class="fas fa-credit-card mr-2"></i>Subscribe Now
                     </button>
                 </div>
-                
-                <!-- Lifetime -->
+                  <!-- Yearly -->
                 <div class="bg-gray-800 p-8 rounded-lg">
-                    <h3 class="text-2xl font-bold mb-4">Lifetime Deal</h3>
-                    <div class="text-4xl font-bold mb-6">$297<span class="text-lg text-gray-400"> once</span></div>
+                    <h3 class="text-2xl font-bold mb-4">Yearly Deal</h3>
+                    <div class="text-4xl font-bold mb-6">$474<span class="text-lg text-gray-400">/year</span></div>
                     <ul class="space-y-3 mb-8 text-gray-300">
                         <li><i class="fas fa-check text-green-400 mr-2"></i>Everything in Pro</li>
-                        <li><i class="fas fa-check text-green-400 mr-2"></i>Lifetime Updates</li>
+                        <li><i class="fas fa-check text-green-400 mr-2"></i>Annual Billing (Save $474)</li>
                         <li><i class="fas fa-check text-green-400 mr-2"></i>Future Tools Included</li>
-                        <li><i class="fas fa-check text-green-400 mr-2"></i>Reseller Rights</li>
+                        <li><i class="fas fa-check text-green-400 mr-2"></i>Premium Support</li>
                     </ul>                    <button 
                         onclick="startCheckout(event)" 
                         data-checkout-button
-                        data-price-id="price_lifetime_deal_297"
-                        data-is-lifetime="true"
+                        data-price-id="price_1RasluE92IbV5FBUlp01YVZe"
+                        data-is-yearly="true"
                         disabled
                         class="w-full bg-gradient-to-r from-green-600 to-blue-600 text-white py-3 rounded-lg hover:opacity-90 transition duration-200">
-                        <i class="fas fa-credit-card mr-2"></i>Get Lifetime Access
+                        <i class="fas fa-credit-card mr-2"></i>Get Yearly Access
                     </button>
                 </div>
             </div>
@@ -441,14 +439,13 @@
                 if (!priceId) {
                     throw new Error('Invalid price selected');
                 }
-                
-                // Check if this is the lifetime deal button
-                const isLifetimeDeal = currentButton.dataset.isLifetime === 'true';
-                console.log('Selected plan:', isLifetimeDeal ? 'Lifetime Deal' : 'Subscription');
+                  // Check if this is the yearly deal button
+                const isYearlyDeal = currentButton.dataset.isYearly === 'true';
+                console.log('Selected plan:', isYearlyDeal ? 'Yearly Deal' : 'Subscription');
                 
                 // Store checkout info in localStorage
                 localStorage.setItem('selectedPriceId', priceId);
-                localStorage.setItem('isLifetimeDeal', isLifetimeDeal ? 'true' : 'false');
+                localStorage.setItem('isYearlyDeal', isYearlyDeal ? 'true' : 'false');
 
                 openAuthModal();
 
@@ -571,59 +568,52 @@ const ERROR_MESSAGES = {
 };
 
 async function createCheckoutSession(email, userId) {
-    const priceId = localStorage.getItem('selectedPriceId');
-      // Determine plan type from price ID for consistent handling
+    const priceId = localStorage.getItem('selectedPriceId');    // Determine plan type from price ID for consistent handling
     // UPDATED PRICE ID MAPPING TO MATCH ACTUAL HTML ELEMENTS
     let planType;
-    if (priceId === 'price_lifetime_deal_297') {
-        planType = 'Lifetime Deal';
-        console.log('Setting plan type: Lifetime Deal');
+    if (priceId === 'price_1RasluE92IbV5FBUlp01YVZe') {
+        planType = 'Yearly Deal';
+        console.log('Setting plan type: Yearly Deal');
     } else if (priceId === 'price_1RYhAlE92IbV5FBUCtOmXIow') {
         planType = 'Starter';
-        console.log('Setting plan type: Starter');
-    } else if (priceId === 'price_1RSdrmE92IbV5FBUV1zE2VhD') {
+        console.log('Setting plan type: Starter');    } else if (priceId === 'price_1RSdrmE92IbV5FBUV1zE2VhD') {
         planType = 'Pro';
         console.log('Setting plan type: Pro');
-    } else if (priceId === 'price_1RYhFGE92IbV5FBUqiKOcIqX') { // Legacy ID
-        planType = 'Pro'; 
-        console.log('Setting plan type: Pro (legacy ID)');
     } else {
         planType = 'Starter'; // Default
         console.log('Unknown price ID, defaulting to: Starter');
     }
-    
-    // Set isLifetimeDeal flag based on price ID or localStorage
-    const isLifetimeDeal = priceId === 'price_lifetime_deal_297' || localStorage.getItem('isLifetimeDeal') === 'true';
+      // Set isYearlyDeal flag based on price ID or localStorage
+    const isYearlyDeal = priceId === 'price_1RasluE92IbV5FBUlp01YVZe' || localStorage.getItem('isYearlyDeal') === 'true';
     
     // Log all the details to help debugging
     console.log('DETAILED CHECKOUT INFO:');
     console.log('- priceId from localStorage:', priceId);
     console.log('- planType determined:', planType);
-    console.log('- isLifetimeDeal flag:', isLifetimeDeal);
-    console.log('- localStorage.isLifetimeDeal:', localStorage.getItem('isLifetimeDeal'));
-    console.log('- detected as lifetime deal:', isLifetimeDeal ? 'YES' : 'NO');
+    console.log('- isYearlyDeal flag:', isYearlyDeal);
+    console.log('- localStorage.isYearlyDeal:', localStorage.getItem('isYearlyDeal'));
+    console.log('- detected as yearly deal:', isYearlyDeal ? 'YES' : 'NO');
     
-    // Force special lifetime handling for our special price ID
-    if (priceId === 'price_lifetime_deal_297') {
-        console.log('SPECIAL HANDLING: Detected lifetime price ID, forcing payment mode');
+    // Force special yearly handling for our special price ID
+    if (priceId === 'price_1RasluE92IbV5FBUlp01YVZe') {
+        console.log('SPECIAL HANDLING: Detected yearly price ID, using subscription mode');
     }
     
     // Store planType in localStorage for potential use in success page
     localStorage.setItem('selectedPlanType', planType);
-    
-    const requestBody = { 
+      const requestBody = { 
         customerEmail: email, 
         userId,
         priceId: priceId || process.env.STRIPE_PRICE_ID,
         planType: planType, // Explicitly pass plan type
-        isLifetimeDeal: isLifetimeDeal
+        isYearlyDeal: isYearlyDeal
     };
       // CRITICAL DEBUG FOR FRONTEND->BACKEND COMMUNICATION
     console.log('%c CREATE CHECKOUT SESSION - FRONTEND TO BACKEND DATA ', 'background: #ff0000; color: white; font-size: 14px;');
     console.log('Final request body to be sent:', JSON.stringify(requestBody, null, 2));
     console.log('Price ID being sent:', requestBody.priceId);
     console.log('Plan Type being sent:', requestBody.planType);
-    console.log('Is Lifetime Deal flag:', requestBody.isLifetimeDeal);
+    console.log('Is Yearly Deal flag:', requestBody.isYearlyDeal);
     
     const response = await fetch('/.netlify/functions/create-checkout-session', {
         method: 'POST',

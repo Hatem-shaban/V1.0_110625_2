@@ -35,11 +35,10 @@ exports.handler = async (event, context) => {
 
         // Parse request body
         const requestBody = JSON.parse(event.body);
-        const { customerEmail, userId, priceId } = requestBody;
-        // Explicitly check for the isLifetimeDeal flag
-        const isLifetimeDeal = requestBody.isLifetimeDeal === true;
+        const { customerEmail, userId, priceId } = requestBody;        // Explicitly check for the isYearlyDeal flag
+        const isYearlyDeal = requestBody.isYearlyDeal === true;
         
-        console.log('Request body parsed:', { customerEmail, userId, priceId, isLifetimeDeal });
+        console.log('Request body parsed:', { customerEmail, userId, priceId, isYearlyDeal });
 
         if (!customerEmail || !userId) {
             throw new Error('Missing required fields');
@@ -65,12 +64,10 @@ exports.handler = async (event, context) => {
         // Determine plan type and create appropriate checkout session
         let planType;
         let sessionParams;
-        let subscriptionStatus;
-
-        // HANDLE LIFETIME DEALS
-        if (isLifetimeDeal) {
-            console.log('Creating LIFETIME DEAL checkout');
-            planType = 'Lifetime Deal';
+        let subscriptionStatus;        // HANDLE YEARLY DEALS
+        if (isYearlyDeal) {
+            console.log('Creating YEARLY DEAL checkout');
+            planType = 'Yearly Deal';
             subscriptionStatus = 'pending_lifetime';
             
             sessionParams = {
