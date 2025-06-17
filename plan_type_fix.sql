@@ -55,3 +55,32 @@ SET plan_type =
     ELSE 'Starter'
   END
 WHERE plan_type IS NULL OR plan_type = '';
+
+-- Alter the constraint to allow the new Yearly Deal plan type
+ALTER TABLE public.users DROP CONSTRAINT IF EXISTS valid_plan_type;
+ALTER TABLE public.users ADD CONSTRAINT valid_plan_type 
+CHECK (plan_type IN ('Starter', 'Pro', 'Yearly Deal', NULL));
+
+-- Update ALL users to set their plan_type based on their selected_plan
+-- This will fix any existing incorrect plan types
+UPDATE users
+SET plan_type = 
+  CASE
+    WHEN selected_plan = 'price_1RasluE92IbV5FBUlp01YVZe' THEN 'Yearly Deal'
+    WHEN selected_plan = 'price_1RYhAlE92IbV5FBUCtOmXIow' THEN 'Starter'   
+    WHEN selected_plan = 'price_1RSdrmE92IbV5FBUV1zE2VhD' THEN 'Pro'
+    ELSE plan_type -- Keep current value if no matching price ID
+  END,
+  updated_at = NOW()
+WHERE selected_plan IS NOT NULL;
+
+-- Also update subscription_status for Yearly Deal users
+UPDATE users
+SET subscription_status = 'yearly_active'
+WHERE plan_type = 'Yearly Deal' AND subscription_status = 'active';
+
+-- Show the results for verification
+SELECT id, email, plan_type, selected_plan, subscription_status
+FROM users
+ORDER BY created_at DESC
+LIMIT 10;
