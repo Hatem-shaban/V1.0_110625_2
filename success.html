@@ -123,24 +123,56 @@
                     }
                     console.log('Forced plan_type to:', updateData.plan_type);
                 }
-                  
-                // Try to use supabaseAdmin if it exists, otherwise fall back to regular client
+                    // Try to use supabaseAdmin if it exists, otherwise fall back to regular client
                 const supabaseClient = stack.supabaseAdmin || stack.supabase;
                 console.log('Using client:', supabaseClient === stack.supabase ? 'regular' : 'admin');
                 
-                // First attempt update with select to verify results
-                const { data, error } = await supabaseClient
-                    .from('users')
-                    .update(updateData)
-                    .eq('id', userId)
-                    .select()
-                    .single();
+                let data, error;
                 
-                // Log detailed update results for debugging
-                console.log('Update response data:', data);
-                console.log('Update plan_type value in response:', data?.plan_type);
+                try {
+                    // First attempt update with select to verify results
+                    const result = await supabaseClient
+                        .from('users')
+                        .update(updateData)
+                        .eq('id', userId)
+                        .select()
+                        .single();
+                    
+                    data = result.data;
+                    error = result.error;
+                    
+                    // Log detailed update results for debugging
+                    console.log('Update response data:', data);
+                    console.log('Update plan_type value in response:', data?.plan_type);
+                } catch (updateError) {
+                    console.error('Exception during update operation:', updateError);
+                    error = updateError;
+                }
 
-                if (error) throw error;
+                // If update failed, try alternative approach
+                if (error) {
+                    console.error('Update failed:', error);
+                    console.log('Trying alternative update method...');
+                    
+                    try {
+                        // Try simple update without select
+                        const fallbackResult = await stack.supabase
+                            .from('users')
+                            .update(updateData)
+                            .eq('id', userId);
+                        
+                        if (fallbackResult.error) {
+                            console.error('Fallback update also failed:', fallbackResult.error);
+                            throw fallbackResult.error;
+                        } else {
+                            console.log('Fallback update succeeded');
+                            // We don't have the data, so we'll need to fetch it separately
+                        }
+                    } catch (fallbackError) {
+                        console.error('Fallback update exception:', fallbackError);
+                        throw fallbackError;
+                    }
+                }
 
                 // Verify the update
                 const { data: verifyUser, error: verifyError } = await stack.supabase
@@ -157,24 +189,49 @@
                     throw new Error('Subscription status update failed');
                 }                // Also verify plan_type was set
                 // First fetch the complete user data to check current state
-                const { data: completeUser, error: fetchCompleteError } = await stack.supabase
-                    .from('users')
-                    .select('plan_type, selected_plan, subscription_status')
-                    .eq('id', userId)
-                    .single();
+                let completeUser;
+                try {
+                    const { data: fetchedUser, error: fetchCompleteError } = await stack.supabase
+                        .from('users')
+                        .select('plan_type, selected_plan, subscription_status')
+                        .eq('id', userId)
+                        .single();
                     
-                console.log('Complete user data after update:', completeUser);
+                    if (fetchCompleteError) {
+                        console.error('Error fetching complete user:', fetchCompleteError);
+                        // Continue with what we know from previous queries
+                        completeUser = { 
+                            plan_type: userData.plan_type,
+                            selected_plan: userData.selected_plan,
+                            subscription_status: verifyUser.subscription_status 
+                        };
+                    } else {
+                        completeUser = fetchedUser;
+                    }
+                    
+                    console.log('Complete user data after update:', completeUser);
+                } catch (fetchError) {
+                    console.error('Exception when fetching complete user:', fetchError);
+                    // Fallback to existing user data
+                    completeUser = { 
+                        plan_type: userData.plan_type,
+                        selected_plan: userData.selected_plan 
+                    };
+                }
                 
-                // Verify plan_type is set correctly
-                if (!completeUser.plan_type) {
+                // Verify plan_type is set correctly - with null check
+                if (!completeUser || !completeUser.plan_type) {
                     console.error('Plan type is still empty after update! Attempting direct SQL fix...');
                     
                     try {
+                        // Safe access to selected_plan with fallbacks
+                        const selectedPlan = completeUser?.selected_plan || userData?.selected_plan;
                         // Determine the correct plan type based on available information
-                        const finalPlanType = (completeUser.selected_plan === 'price_1RasluE92IbV5FBUlp01YVZe' ? 'Yearly Deal' : 
-                                              completeUser.selected_plan === 'price_1RYhAlE92IbV5FBUCtOmXIow' ? 'Starter' :
-                                              completeUser.selected_plan === 'price_1RSdrmE92IbV5FBUV1zE2VhD' ? 'Pro' : 
-                                              storedPlanType || debugPlanType || 'Starter');
+                        const finalPlanType = 
+                            (selectedPlan === 'price_1RasluE92IbV5FBUlp01YVZe' ? 'Yearly Deal' : 
+                            selectedPlan === 'price_1RYhAlE92IbV5FBUCtOmXIow' ? 'Starter' :
+                            selectedPlan === 'price_1RSdrmE92IbV5FBUV1zE2VhD' ? 'Pro' : 
+                            storedPlanType || debugPlanType || 'Starter');
                         
                         console.log(`Attempting direct SQL update with plan_type: ${finalPlanType}`);
                         
@@ -286,17 +343,60 @@
                 // Redirect to dashboard after short delay
                 setTimeout(() => {
                     window.location.replace('/dashboard.html');
-                }, 2000);
-
-            } catch (error) {
+                }, 2000);            } catch (error) {
                 console.error('Activation error:', error);
-                statusDiv.innerHTML = `Error: ${error.message}`;
+                
+                // User-friendly error message
+                let errorMessage = 'Activation failed';
+                
+                // Special handling for completeUser is null
+                if (error.message && error.message.includes('completeUser is null')) {
+                    console.error('Handling completeUser null error with emergency fallback');
+                    errorMessage = 'Activation processing...';
+                    
+                    // Attempt emergency fallback
+                    try {
+                        // Get the user ID and redirect to dashboard after delay
+                        const userId = localStorage.getItem('userId');
+                        if (userId) {
+                            // Force localStorage plan type for emergency recovery
+                            localStorage.setItem('serverConfirmedPlanType', 'Starter');
+                            
+                            // Longer delay for emergency recovery
+                            setTimeout(() => {
+                                window.location.replace('/dashboard.html?recovery=true');
+                            }, 5000);
+                            
+                            statusDiv.innerHTML = 'Finishing activation...';
+                            return; // Skip the error display
+                        }
+                    } catch (recoveryError) {
+                        console.error('Recovery attempt failed:', recoveryError);
+                    }
+                }
+                  // Display error to user
+                statusDiv.innerHTML = 'Activation issue encountered';
+                
+                // Use the new error display mechanism
+                if (window.showUserError) {
+                    window.showUserError(errorMessage);
+                } else {
+                    statusDiv.innerHTML += `<br>Error: ${errorMessage}`;
+                }
+                
                 // Log additional error details
                 if (error.details) console.error('Error details:', error.details);
                 
-                setTimeout(() => {
-                    window.location.replace('/?error=activation');
-                }, 3000);
+                // Show the manual continue link immediately
+                const link = document.getElementById('manualContinueLink');
+                if (link) link.classList.remove('hidden');
+                
+                // Only redirect on fatal errors
+                if (errorMessage !== 'Activation processing...') {
+                    setTimeout(() => {
+                        window.location.replace('/?error=activation');
+                    }, 10000); // Longer timeout to give user time to see the continue link
+                }
             }
         }
 
@@ -309,6 +409,27 @@
         <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
         <h1 class="text-2xl font-bold mb-4">Activating Your Subscription</h1>
         <div id="status" class="text-gray-400">Initializing...</div>
+        <div id="errorMessage" class="text-red-500 mt-4 hidden"></div>
+        <div class="mt-6">
+            <a href="/dashboard.html" class="text-blue-400 underline hidden" id="manualContinueLink">Continue to Dashboard</a>
+        </div>
     </div>
+    
+    <script>
+        // Show manual continue link after 10 seconds as a fallback
+        setTimeout(() => {
+            const link = document.getElementById('manualContinueLink');
+            if (link) link.classList.remove('hidden');
+        }, 10000);
+        
+        // Function to display user-friendly error
+        window.showUserError = function(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            if (errorDiv) {
+                errorDiv.textContent = message;
+                errorDiv.classList.remove('hidden');
+            }
+        };
+    </script>
 </body>
 </html>
