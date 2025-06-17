@@ -106,19 +106,39 @@
                         }
                     }
                 }
+                  console.log('Updating user with:', updateData);
                 
-                console.log('Updating user with:', updateData);
-                  // Now update the subscription status and possibly plan_type
+                // CRITICAL: Ensure plan_type is set based on selected_plan
+                // If we don't have a plan_type yet, make sure we get one
+                if (!updateData.plan_type && userData.selected_plan) {
+                    console.log('CRITICAL: plan_type missing, forcing based on selected_plan:', userData.selected_plan);
+                    if (userData.selected_plan === 'price_1RasluE92IbV5FBUlp01YVZe') {
+                        updateData.plan_type = 'Yearly Deal';
+                    } else if (userData.selected_plan === 'price_1RYhAlE92IbV5FBUCtOmXIow') {
+                        updateData.plan_type = 'Starter';
+                    } else if (userData.selected_plan === 'price_1RSdrmE92IbV5FBUV1zE2VhD') {
+                        updateData.plan_type = 'Pro';
+                    } else {
+                        updateData.plan_type = 'Starter'; // Default
+                    }
+                    console.log('Forced plan_type to:', updateData.plan_type);
+                }
+                  
                 // Try to use supabaseAdmin if it exists, otherwise fall back to regular client
                 const supabaseClient = stack.supabaseAdmin || stack.supabase;
                 console.log('Using client:', supabaseClient === stack.supabase ? 'regular' : 'admin');
                 
+                // First attempt update with select to verify results
                 const { data, error } = await supabaseClient
                     .from('users')
                     .update(updateData)
                     .eq('id', userId)
                     .select()
                     .single();
+                
+                // Log detailed update results for debugging
+                console.log('Update response data:', data);
+                console.log('Update plan_type value in response:', data?.plan_type);
 
                 if (error) throw error;
 
@@ -135,16 +155,26 @@
                 if (verifyUser.subscription_status !== 'active' && verifyUser.subscription_status !== 'lifetime_active') {
                     console.error('Expected status to be active or lifetime_active but got:', verifyUser.subscription_status);
                     throw new Error('Subscription status update failed');
-                }
-                  // Also verify plan_type was set
-                if (!verifyUser.plan_type) {
+                }                // Also verify plan_type was set
+                // First fetch the complete user data to check current state
+                const { data: completeUser, error: fetchCompleteError } = await stack.supabase
+                    .from('users')
+                    .select('plan_type, selected_plan, subscription_status')
+                    .eq('id', userId)
+                    .single();
+                    
+                console.log('Complete user data after update:', completeUser);
+                
+                // Verify plan_type is set correctly
+                if (!completeUser.plan_type) {
                     console.error('Plan type is still empty after update! Attempting direct SQL fix...');
                     
                     try {
-                        // Try to use stored values for plan type                        const finalPlanType = storedPlanType || debugPlanType || 
-                                             (userData.selected_plan === 'price_1RasluE92IbV5FBUlp01YVZe' ? 'Yearly Deal' : 
-                                              userData.selected_plan === 'price_1RYhAlE92IbV5FBUCtOmXIow' ? 'Starter' :
-                                              userData.selected_plan === 'price_1RSdrmE92IbV5FBUV1zE2VhD' ? 'Pro' : 'Starter');
+                        // Determine the correct plan type based on available information
+                        const finalPlanType = (completeUser.selected_plan === 'price_1RasluE92IbV5FBUlp01YVZe' ? 'Yearly Deal' : 
+                                              completeUser.selected_plan === 'price_1RYhAlE92IbV5FBUCtOmXIow' ? 'Starter' :
+                                              completeUser.selected_plan === 'price_1RSdrmE92IbV5FBUV1zE2VhD' ? 'Pro' : 
+                                              storedPlanType || debugPlanType || 'Starter');
                         
                         console.log(`Attempting direct SQL update with plan_type: ${finalPlanType}`);
                         

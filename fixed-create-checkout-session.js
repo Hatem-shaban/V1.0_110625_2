@@ -117,10 +117,13 @@ exports.handler = async (event, context) => {
         };
 
         // Create the Stripe checkout session
-        const session = await stripe.checkout.sessions.create(sessionParams);
-
-        // Update user in the database with the new plan details
-        const { error: updateError } = await supabaseAdmin
+        const session = await stripe.checkout.sessions.create(sessionParams);        // Update user in the database with the new plan details
+        // Try multiple update approaches to ensure plan_type is set correctly
+        console.log('Updating user with plan_type:', planDetails.name);
+        
+        // First attempt with admin client if available
+        const updateClient = supabaseAdmin || supabase;
+        const { error: updateError } = await updateClient
             .from('users')
             .update({
                 subscription_status: 'pending_activation',
@@ -132,9 +135,44 @@ exports.handler = async (event, context) => {
             .eq('id', userId);
 
         if (updateError) {
-            console.error('Error updating user:', updateError);
-            // Continue with the checkout even if the update fails
-            // The success page will handle setting plan_type as a fallback
+            console.error('Error updating user with admin client:', updateError);
+            
+            // If admin update failed, try with regular client
+            if (updateClient === supabaseAdmin) {
+                console.log('Attempting fallback update with regular client');
+                const { error: fallbackError } = await supabase
+                    .from('users')
+                    .update({
+                        subscription_status: 'pending_activation',
+                        plan_type: planDetails.name,
+                        selected_plan: priceId,
+                        stripe_session_id: session.id,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('id', userId);
+                
+                if (fallbackError) {
+                    console.error('Fallback update also failed:', fallbackError);
+                } else {
+                    console.log('Fallback update successful');
+                }
+            }
+        } else {
+            console.log('User update successful with plan_type:', planDetails.name);
+        }
+        
+        // Verify the update succeeded
+        const { data: verifyData, error: verifyError } = await supabase
+            .from('users')
+            .select('plan_type, selected_plan')
+            .eq('id', userId)
+            .single();
+            
+        if (verifyError) {
+            console.error('Error verifying update:', verifyError);
+        } else {
+            console.log('Verification results:', verifyData);
+            console.log('Plan type set correctly:', verifyData.plan_type === planDetails.name);
         }
 
         return {

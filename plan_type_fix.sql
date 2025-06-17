@@ -68,19 +68,28 @@ ORDER BY
   created_at DESC
 LIMIT 10;
 
--- 2. Direct mapping of price IDs to plan types
--- This ensures plan_type is always aligned with the selected_plan
+-- 2. Direct mapping of price IDs to plan types (TWO-STEP APPROACH)
+-- First, update yearly deal users specifically
+UPDATE users
+SET 
+  plan_type = 'Yearly Deal',
+  subscription_status = 'yearly_active',
+  updated_at = NOW()
+WHERE 
+  selected_plan = 'price_1RasluE92IbV5FBUlp01YVZe';
+
+-- Then update other plan types
 UPDATE users
 SET 
   plan_type = CASE
-    WHEN selected_plan = 'price_1RasluE92IbV5FBUlp01YVZe' THEN 'Yearly Deal'
     WHEN selected_plan = 'price_1RYhAlE92IbV5FBUCtOmXIow' THEN 'Starter'
     WHEN selected_plan = 'price_1RSdrmE92IbV5FBUV1zE2VhD' THEN 'Pro'
-    ELSE plan_type -- Keep existing plan_type if no selected_plan match
+    ELSE 'Starter' -- Default to Starter for unknown plans
   END,
   updated_at = NOW()
 WHERE 
-  selected_plan IS NOT NULL;
+  selected_plan IS NOT NULL 
+  AND selected_plan != 'price_1RasluE92IbV5FBUlp01YVZe'; -- Skip yearly deals already updated
 
 -- 3. Set the correct subscription_status for yearly plans
 UPDATE users
@@ -90,7 +99,23 @@ WHERE
   plan_type = 'Yearly Deal' AND
   subscription_status IS DISTINCT FROM 'yearly_active';
 
--- 4. Verify the changes were applied correctly
+-- 4. Fix any remaining mismatches between plan_type and selected_plan
+-- This ensures every user has the correct plan_type based on their selected_plan
+UPDATE users
+SET plan_type = 
+  CASE 
+    WHEN selected_plan = 'price_1RasluE92IbV5FBUlp01YVZe' AND plan_type != 'Yearly Deal' THEN 'Yearly Deal'
+    WHEN selected_plan = 'price_1RYhAlE92IbV5FBUCtOmXIow' AND plan_type != 'Starter' THEN 'Starter'
+    WHEN selected_plan = 'price_1RSdrmE92IbV5FBUV1zE2VhD' AND plan_type != 'Pro' THEN 'Pro'
+    ELSE plan_type
+  END,
+  updated_at = NOW()
+WHERE 
+  (selected_plan = 'price_1RasluE92IbV5FBUlp01YVZe' AND plan_type != 'Yearly Deal') OR
+  (selected_plan = 'price_1RYhAlE92IbV5FBUCtOmXIow' AND plan_type != 'Starter') OR
+  (selected_plan = 'price_1RSdrmE92IbV5FBUV1zE2VhD' AND plan_type != 'Pro');
+
+-- 5. Verify the changes were applied correctly
 SELECT 
   id, 
   email, 
@@ -103,7 +128,7 @@ ORDER BY
   updated_at DESC
 LIMIT 10;
 
--- 5. Summary of plan types and selected plans for verification
+-- 6. Summary of plan types and selected plans for verification
 SELECT 
   plan_type, 
   selected_plan, 
